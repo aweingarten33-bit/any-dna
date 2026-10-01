@@ -22,7 +22,7 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-function serve(handle: (body: Record<string, unknown>) => Promise<unknown>) {
+function serve(handle: (body: Record<string, unknown>) => Promise<unknown>, special: (error: unknown) => Response | null = () => null) {
   return async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
     if (req.method !== 'POST') return json({ error: 'Use POST' }, 405);
@@ -30,6 +30,8 @@ function serve(handle: (body: Record<string, unknown>) => Promise<unknown>) {
       const body = await req.json().catch(() => { throw new HttpError(400, 'Body must be JSON'); });
       return json(await handle(body ?? {}));
     } catch (error) {
+      const handled = special(error);
+      if (handled) return handled;
       const status = error instanceof HttpError ? error.status : error instanceof PassError || error instanceof AppStoreError ? 502 : 500;
       if (status >= 500) console.error(error);
       // Unexpected errors can carry internals (SQL, stack details); keep those in the logs.
@@ -144,12 +146,7 @@ async function loadGaps(appId: string, country: string) {
 
 const PASSES: PassName[] = ['dissect', 'gaps', 'build', 'verdict'];
 
-export const runPass = serve(async (body) => {
-  const pass = body.pass as PassName;
-  if (!PASSES.includes(pass)) throw new HttpError(400, `pass must be one of ${PASSES.join(', ')}`);
-  const appId = text(body.app_id, 'app_id', 20);
-  const country = countryOf(body.country);
-
+async function doPass(pass: PassName, body: Record<string, unknown>, appId: string, country: string): Promise<unknown> {
   if (pass === 'dissect') { const { output, cached } = await ensureDissect(appId, country); return { output, cached }; }
   if (pass === 'gaps') return ensureGaps(appId, country);
 
@@ -163,4 +160,65 @@ export const runPass = serve(async (body) => {
   if (!idea.success) throw new HttpError(400, 'verdict needs the idea from the build step');
   const searched = await searchCompetitors(idea.data.search_terms, country, appId);
   return { output: await runVerdict(idea.data, audience, searched), searched };
-});
+}
+
+// An AI pass can take a minute or more. Holding one HTTP request open that long
+// breaks on phones (a locked screen or a switched app drops it) and on proxies.
+// So a pass runs as a job on the server: a request waits up to WAIT_MS, and if
+// the job isn't done it answers "pending"; the browser asks again with the same
+// body and joins the same job. Finished results are kept for a while, so a
+// dropped request never restarts the work.
+const WAIT_MS = Number(Deno.env.get('PASS_WAIT_MS') ?? 20_000);
+const KEEP_MS = 15 * 60 * 1000;
+type Job = { promise: Promise<unknown>; endedAt?: number; outcome?: { ok: true; value: unknown } | { ok: false; error: unknown } };
+const jobs = new Map<string, Job>();
+
+/** Drops every pass job. For tests. */
+export function forgetJobs() { jobs.clear(); }
+
+function startJob(key: string, label: string, work: () => Promise<unknown>): Job {
+  const started = Date.now();
+  const seconds = () => ((Date.now() - started) / 1000).toFixed(1);
+  console.log(`[pass] ${label} started`);
+  const job: Job = { promise: Promise.resolve() };
+  job.promise = work().then(
+    (value) => { job.outcome = { ok: true, value }; job.endedAt = Date.now(); console.log(`[pass] ${label} done in ${seconds()}s`); },
+    (error) => {
+      job.outcome = { ok: false, error };
+      job.endedAt = Date.now();
+      console.error(`[pass] ${label} failed after ${seconds()}s: ${error instanceof Error ? error.message : error}`);
+    },
+  );
+  for (const [other, old] of jobs) if (old.endedAt && Date.now() - old.endedAt > KEEP_MS) jobs.delete(other);
+  jobs.set(key, job);
+  return job;
+}
+
+class Pending {}
+
+/** Runs a pass. `admit` is asked before a new job starts (the rate limit); joining a running job is free. */
+export function runPass(req: Request, admit: () => string | null = () => null): Promise<Response> {
+  return serve(async (body) => {
+    const pass = body.pass as PassName;
+    if (!PASSES.includes(pass)) throw new HttpError(400, `pass must be one of ${PASSES.join(', ')}`);
+    const appId = text(body.app_id, 'app_id', 20);
+    const country = countryOf(body.country);
+    const key = JSON.stringify([pass, appId, country, pass === 'build' || pass === 'verdict' ? body.audience : null, pass === 'verdict' ? body.idea : null]);
+
+    let job = jobs.get(key);
+    // A failure is told once, then forgotten, so "Try again" starts fresh.
+    if (job?.outcome && !job.outcome.ok && Date.now() - job.endedAt! > 2 * 60 * 1000) job = undefined;
+    if (!job) {
+      const limited = admit();
+      if (limited) throw new HttpError(429, limited);
+      job = startJob(key, `${pass} ${country}/${appId}${typeof body.audience === 'string' ? ` for "${body.audience.slice(0, 40)}"` : ''}`, () => doPass(pass, body, appId, country));
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([job.promise, new Promise((resolve) => { timer = setTimeout(resolve, WAIT_MS); })]);
+    clearTimeout(timer);
+    if (!job.outcome) throw new Pending();
+    if (job.outcome.ok) return job.outcome.value;
+    if (jobs.get(key) === job) jobs.delete(key);
+    throw job.outcome.error;
+  }, (error) => error instanceof Pending ? json({ pending: true }, 202) : null)(req);
+}

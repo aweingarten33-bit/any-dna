@@ -114,9 +114,23 @@ function useMeter(states: Record<string, StepState>) {
   return Math.floor(value);
 }
 
+/** True once the same step has been running for a while, so the screen can say it's still going. */
+function useSlow(states: Record<string, StepState>, after = 25_000) {
+  const running = Object.entries(states).filter(([, state]) => state === 'running').map(([id]) => id).join();
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setSlow(false);
+    if (!running) return;
+    const timer = window.setTimeout(() => setSlow(true), after);
+    return () => window.clearTimeout(timer);
+  }, [running, after]);
+  return slow;
+}
+
 export function Loading({ app, audience, onDone, onBack }: { app: AppListing; audience: string; onDone: (blueprint: Blueprint) => void; onBack: () => void }) {
   const { states, progress, error, retry } = useRun(app, audience, onDone);
   const meter = useMeter(states);
+  const slow = useSlow(states);
   const findings = Findings({ app, progress });
   return <Screen n="03" label="The blueprint" title="Building your blueprint"
     sub={<span className="route"><span>{app.name}</span><ArrowRight size={14} /><span>{audience}</span></span>}
@@ -144,7 +158,9 @@ export function Loading({ app, audience, onDone, onBack }: { app: AppListing; au
         </li>;
       })}
     </ol>
-    {error ? <p className="flow-error" role="alert">{error}</p> : !findings.length && <p className="screen-note">What we find shows up here as it comes in. If a step fails, the finished ones are kept.</p>}
+    {error ? <p className="flow-error" role="alert">{error}</p>
+      : slow ? <p className="screen-note" role="status">Still working. The AI steps can take a minute or two. You can lock your phone; the run picks up where it left off.</p>
+      : !findings.length && <p className="screen-note">What we find shows up here as it comes in. If a step fails, the finished ones are kept.</p>}
   </Screen>;
 }
 

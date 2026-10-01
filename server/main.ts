@@ -9,6 +9,7 @@
 //   DATABASE_URL          optional Postgres for the app_cache; memory otherwise
 //   AI_CALLS_PER_HOUR     per-visitor limit on AI calls (default 30, about 7 runs)
 //   AI_CALLS_PER_DAY      limit across all visitors (default 300)
+//   PASS_WAIT_MS          how long one request waits on a pass before answering "pending" (default 20000)
 import { serveDir, serveFile } from 'jsr:@std/http@^1/file-server';
 import { getReviews, resolveApp, runPass } from './lib/handlers.ts';
 import { migrate } from './lib/cache.ts';
@@ -16,7 +17,6 @@ import { migrate } from './lib/cache.ts';
 const ROUTES: Record<string, (req: Request) => Promise<Response>> = {
   'resolve-app': resolveApp,
   'get-reviews': getReviews,
-  'run-pass': runPass,
 };
 
 // ---- Rate limits on AI calls (run-pass is the only route that calls the AI) ----
@@ -56,12 +56,10 @@ export async function handle(req: Request, info: Deno.ServeHandlerInfo): Promise
 
   const route = url.pathname.match(/^\/api\/([\w-]+)$/)?.[1];
   if (route !== undefined) {
+    // run-pass counts against the AI limit only when it starts a new job, not when it checks on one.
+    if (route === 'run-pass') return runPass(req, () => takeAiCall(visitorId(req, info)));
     const handler = ROUTES[route];
     if (!handler) return Response.json({ error: 'Not found' }, { status: 404 });
-    if (route === 'run-pass' && req.method === 'POST') {
-      const limited = takeAiCall(visitorId(req, info));
-      if (limited) return Response.json({ error: limited }, { status: 429 });
-    }
     return handler(req);
   }
 

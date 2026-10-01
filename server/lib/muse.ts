@@ -25,10 +25,11 @@ export async function museGenerate(req: GenerateRequest): Promise<{ text: string
   // One retry for network errors, rate limits and server errors.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let response: Response;
+    const sent = Date.now();
     try {
       response = await fetch(ENDPOINT, {
         method: 'POST',
-        signal: AbortSignal.timeout(150_000),
+        signal: AbortSignal.timeout(120_000),
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: MODEL,
@@ -41,6 +42,9 @@ export async function museGenerate(req: GenerateRequest): Promise<{ text: string
       });
     } catch (error) {
       lastError = error instanceof Error && error.name === 'TimeoutError' ? 'Muse timed out' : 'could not reach Muse';
+      console.error(`[muse] attempt ${attempt + 1}: ${lastError}`);
+      // A timed-out call already used two minutes; another would leave the user waiting four.
+      if (error instanceof Error && error.name === 'TimeoutError') break;
       continue;
     }
 
@@ -48,16 +52,20 @@ export async function museGenerate(req: GenerateRequest): Promise<{ text: string
     if (response.status === 404) throw new PassError(`Muse model "${MODEL}" is not available on this key. Check META_MODEL.`);
     if (response.status === 429 || response.status >= 500) {
       lastError = `Muse returned HTTP ${response.status}`;
+      console.error(`[muse] attempt ${attempt + 1}: ${lastError} ${(await response.text().catch(() => '')).slice(0, 200)}`);
       await new Promise((resolve) => setTimeout(resolve, 1500));
       continue;
     }
     if (!response.ok) {
       const detail = (await response.text().catch(() => '')).slice(0, 200);
+      console.error(`[muse] HTTP ${response.status}: ${detail}`);
       throw new PassError(`Muse returned HTTP ${response.status}. ${detail}`.trim());
     }
 
     const payload = await response.json() as Record<string, unknown>;
     const incomplete = typeof payload.status === 'string' && payload.status !== 'completed';
+    const usage = payload.usage as { output_tokens?: number } | undefined;
+    console.log(`[muse] ${req.effort} effort, ${((Date.now() - sent) / 1000).toFixed(1)}s, ${usage?.output_tokens ?? '?'} output tokens, status ${payload.status}`);
     return { text: outputText(payload), truncated: incomplete };
   }
   throw new PassError(`Muse failed: ${lastError}. Please try again.`);

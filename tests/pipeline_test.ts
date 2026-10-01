@@ -1,7 +1,7 @@
 // End-to-end test of the edge-function handlers against the fixture doubles.
 //   deno test -A tests/
 import { assert, assertEquals, assertMatch } from 'jsr:@std/assert@^1';
-import { getReviews, resolveApp, runPass } from '../server/lib/handlers.ts';
+import { forgetJobs, getReviews, resolveApp, runPass } from '../server/lib/handlers.ts';
 import { parseAppInput } from '../server/lib/itunes.ts';
 import type { FitCheck, Gaps, Idea, Verdict } from '../server/lib/types.ts';
 import { installFixtures, PASS_FIXTURES, SOURCE_ID } from '../dev/fixtures.ts';
@@ -12,7 +12,9 @@ Deno.env.delete('ANTHROPIC_API_KEY');
 Deno.env.delete('AI_PROVIDER');
 Deno.env.delete('DATABASE_URL');
 
-async function call(handler: (req: Request) => Promise<Response>, body: unknown) {
+async function call(handler: (req: Request) => Promise<Response>, body: unknown, { fresh = true } = {}) {
+  // Pass results are kept on the server for a while; most tests want a real run each time.
+  if (fresh) forgetJobs();
   const response = await handler(new Request('http://local/', { method: 'POST', body: JSON.stringify(body) }));
   return { status: response.status, body: await response.json() };
 }
@@ -172,5 +174,29 @@ Deno.test('build with nothing cached fetches the reviews once and keeps both ana
     assertEquals(gapsAgain.body.cached, true);
   } finally {
     fixtures.restore();
+  }
+});
+
+Deno.test('a long pass answers "pending", and asking again joins the same job', async () => {
+  Deno.env.set('PASS_WAIT_MS', '50');
+  const { runPass: slowRunPass, forgetJobs: forgetSlow } = await import(`../server/lib/handlers.ts?wait=50`);
+  const fixtures = installFixtures({ delayMs: 200 });
+  try {
+    forgetSlow();
+    const body = { pass: 'build', app_id: SOURCE_ID, country: 'ca', audience: 'Home cooks' };
+    const first = await call(slowRunPass, body, { fresh: false });
+    assertEquals(first.status, 202);
+    assertEquals(first.body.pending, true);
+    let result = first;
+    for (let i = 0; i < 100 && result.status === 202; i += 1) result = await call(slowRunPass, body, { fresh: false });
+    assertEquals(result.status, 200);
+    assertEquals(result.body.output.idea.name, PASS_FIXTURES.build.idea.name);
+    assertEquals(fixtures.attempts.get('build'), 1);
+    // Finished results are kept, so a dropped reply doesn't redo the work.
+    assertEquals((await call(slowRunPass, body, { fresh: false })).status, 200);
+    assertEquals(fixtures.attempts.get('build'), 1);
+  } finally {
+    fixtures.restore();
+    Deno.env.delete('PASS_WAIT_MS');
   }
 });
