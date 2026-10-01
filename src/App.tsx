@@ -14,7 +14,6 @@ import type { AppListing, Blueprint, SavedIdea } from '../server/lib/types.ts';
 type ScreenState =
   | { name: 'home' }
   | { name: 'confirm'; candidates: AppListing[]; index: number }
-  | { name: 'to-audience'; app: AppListing }
   | { name: 'audience'; app: AppListing; audience?: string }
   | { name: 'loading'; app: AppListing; audience: string }
   | { name: 'to-result'; idea: SavedIdea }
@@ -93,14 +92,9 @@ export default function App() {
   switch (screen.name) {
     case 'confirm':
       body = <Confirm candidates={screen.candidates} index={screen.index}
-        onYes={(app) => go({ name: 'to-audience', app })}
+        onYes={(app) => go({ name: 'audience', app })}
         onNext={() => go({ ...screen, index: screen.index + 1 }, true)}
         onSearchAgain={goHome} />;
-      break;
-    case 'to-audience':
-      body = <Divider n="02" part="Part 2 of 3" title="Who’s it for?" sub={`${screen.app.name} works. Next, pick who you want to rebuild it for.`} action="Continue"
-        band={[screen.app.name, 'Same mechanics', 'New audience']}
-        onContinue={() => go({ name: 'audience', app: screen.app }, true)} />;
       break;
     case 'audience':
       body = <Audience app={screen.app} initial={screen.audience} onPick={(audience) => go({ name: 'loading', app: screen.app, audience })} />;
