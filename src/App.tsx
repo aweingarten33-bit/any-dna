@@ -11,7 +11,7 @@ import { NewSteer } from '@/screens/newsteer';
 import type { Mode } from '@/lib/newrun';
 import { NewLoading } from '@/screens/newloading';
 import { NewResult } from '@/screens/newresult';
-import { NewPick } from '@/screens/newpick';
+import { NewPick, type RegenerateKind } from '@/screens/newpick';
 import { Saved } from '@/screens/saved';
 import { Screen } from '@/components/bits';
 import { isNewBlueprint, type FilterResult, type GeneratedIdea, type NewBlueprint, type SavedIdea, type Upload, type UploadRead } from '../server/lib/types.ts';
@@ -38,6 +38,17 @@ function restorable(screen: ScreenState): ScreenState {
 function usable(screen: ScreenState): ScreenState {
   if ('upload' in screen && !screen.upload) return { name: 'home' };
   return screen;
+}
+
+function regeneratedDirection(base: string, kind: RegenerateKind, ideas: GeneratedIdea[]) {
+  const old = ideas.map((idea) => idea.name).join(', ');
+  const ask: Record<RegenerateKind, string> = {
+    new: `Generate a completely different batch. Do not repeat these ideas or their core jobs: ${old}.`,
+    weirder: `Go much farther from the obvious domain. Make the ideas surprising but still useful, understandable and buildable. Do not repeat: ${old}.`,
+    useful: `Prioritize concrete recurring utility over novelty, content effects or social gimmicks. Each idea should solve a problem people already have and deserve to be a standalone app. Do not repeat: ${old}.`,
+    angle: `Use a genuinely different angle on the DNA. Change the job, relationship, economics or who benefits. Do not repeat: ${old}.`,
+  };
+  return [base.trim(), ask[kind]].filter(Boolean).join('\n\n');
 }
 
 export default function App() {
@@ -108,7 +119,6 @@ export default function App() {
         audience={from.audience} direction={from.direction} templateId={templateId} mode={mode}
         onDone={(read, kept, secondRead, found) => go({ name: 'pick', upload: from.upload, audience: from.audience, direction: from.direction, steer: from.steer, read, secondRead, kept, found }, true)}
         onBack={() => history.back()}
-        // Nothing passed: let the user change the source, audience, direction or mode.
         onAdjust={(what) => go(what === 'source' ? { name: 'home' }
           : what === 'audience' ? { name: 'audience', upload: from.upload, audience: from.audience, direction: from.direction, steer: from.steer }
           : { name: 'steer', upload: from.upload, audience: from.audience, direction: from.direction, steer: from.steer }, true)} />;
@@ -117,7 +127,12 @@ export default function App() {
     case 'pick': {
       const from = screen;
       bar = topBar({ left: close });
-      body = <NewPick ideas={from.kept} found={from.found} audience={from.audience} onChoose={(idea, found) => open(from, idea, found)} />;
+      body = <NewPick ideas={from.kept} found={from.found} audience={from.audience}
+        onChoose={(idea, found) => open(from, idea, found)}
+        onRegenerate={(kind) => {
+          const steer = kind === 'angle' ? { ...from.steer, mode: 'angle' as const, second: null } : from.steer;
+          go({ name: 'loading', upload: from.upload, audience: from.audience, direction: regeneratedDirection(from.direction, kind, from.kept), steer });
+        }} />;
       break;
     }
     case 'result': {
@@ -126,7 +141,6 @@ export default function App() {
       bar = topBar({ left: close, title: blueprint.idea.name });
       body = isNewBlueprint(blueprint)
         ? <NewResult blueprint={blueprint} onStartOver={goHome} onUpdate={(next) => update(entry, next)} />
-        // Saved by the earlier app-based version: there's nothing that can be shown any more.
         : <Screen title={blueprint.idea.name} sub="This was saved with an earlier version of the app and can’t be opened any more."
             actions={<button type="button" className="btn-pill is-primary" onClick={goHome}><span>Make a new one</span></button>} />;
       break;
