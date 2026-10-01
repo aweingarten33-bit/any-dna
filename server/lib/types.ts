@@ -61,7 +61,8 @@ export type Competitor = CompetitorListing & {
 
 /** What the user dropped in, as the browser sends it. The bytes travel with each request and are never stored. */
 export type Upload =
-  | { kind: 'text'; text: string }
+  /** Typed words. A song file also arrives as text (its title and artist), marked so the AI is told the audio wasn't heard. */
+  | { kind: 'text'; text: string; from?: 'song-file' }
   | { kind: 'photo'; dataUrl: string; filename: string }
   /** Still frames taken on the phone; the video itself is never uploaded. */
   | { kind: 'video'; frames: string[]; filename: string }
@@ -87,24 +88,36 @@ export type GeneratedIdea = {
   search_terms: string[];
 };
 
-export type NewPassName = 'suggest' | 'read' | 'invent' | 'filter' | 'compete' | 'kit' | 'plan';
+export type NewPassName = 'suggest' | 'research' | 'dna' | 'generate' | 'filter' | 'compete' | 'kit' | 'plan';
 
-/** Stages 1 and 2 of the main prompt: the upload researched, and its DNA. */
-export type UploadRead = {
-  /** False when the upload names a song, film or other work the AI doesn't actually know. */
+/** Prompt 3's optional modes the app offers. (Collide needs a second source.) */
+export type GenerateMode = 'repurpose' | 'x1000' | 'future' | 'angle';
+
+/** Prompt 1: why the source works. */
+export type SourceResearch = {
+  /** False when the source names a song, film or other work the AI doesn't actually know and nothing fetched describes it. */
   recognized: boolean;
-  details: string[];
-  meaning: string;
-  why_different: string;
-  conditions: string;
-  unknowns: string[];
-  mechanics: Array<{ name: string; chain: string; how_it_works: string; why_it_works: string; needs: string; transferable: string }>;
+  core_sequence: string;
+  why_it_works: string;
+  conditions: string[];
+  uncertainties: string[];
+  /** 3–6 concrete source details for callbacks later. Not DNA. */
+  source_details: string[];
 };
+
+/** Prompt 2: the transferable mechanisms, strongest first. */
+export type DnaMechanism = { name: string; how_it_works: string; why_it_works: string; needs: string; transferability: string; chain: string };
+
+/** Prompts 1 and 2 together: what later stages and the Origin panel read. */
+export type UploadRead = { research: SourceResearch; dna: DnaMechanism[] };
+
+/** Prompt 4's result: the ideas that passed, best first, and why the rest didn't. */
+export type FilterResult = { kept: GeneratedIdea[]; rejected: Array<{ name: string; reason: string }> };
 
 /** Everything one new-flow run produces. */
 export type NewBlueprint = {
-  /** 3 for the upload-first rewrite. */
-  version: 3;
+  /** 4 since the ANY DNA prompts (research and DNA are separate stages). */
+  version: 4;
   /** What was uploaded, by kind and a short label. Never the bytes. */
   upload: { kind: Upload['kind']; label: string };
   audience: string;
@@ -112,6 +125,8 @@ export type NewBlueprint = {
   direction?: string;
   /** The template id when the user steered it, or null when they skipped it. */
   templateId: string | null;
+  /** Prompt 3's mode, if one was picked. */
+  mode?: GenerateMode | null;
   /** Stages 1 and 2: what the upload is and its DNA. */
   read: UploadRead;
   idea: GeneratedIdea;
@@ -133,10 +148,10 @@ export type SavedIdea = {
   output_json: NewBlueprint | LegacyBlueprint;
 };
 
-/** Ideas saved by the earlier app-based version. They can't be shown any more; only their name is kept. */
-export type LegacyBlueprint = { version?: 1 | 2; idea: { name: string }; audience: string };
+/** Ideas saved by earlier versions. They can't be shown any more; only their name is kept. */
+export type LegacyBlueprint = { version?: 1 | 2 | 3; idea: { name: string }; audience: string };
 
-/** Ideas made by this version are version 3. */
+/** Ideas made by this version are version 4. */
 export function isNewBlueprint(blueprint: NewBlueprint | LegacyBlueprint): blueprint is NewBlueprint {
-  return blueprint.version === 3;
+  return blueprint.version === 4;
 }

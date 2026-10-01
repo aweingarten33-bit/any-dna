@@ -2,9 +2,6 @@
 // into JSON Schema, constrains the model's output.
 import { z } from 'npm:zod@^4.1.0';
 
-// ---- The new front door: ideas from the upload itself ----------------------
-// The user drops anything (photo, document, typed words) and names an
-// audience. No source app, no DNA extraction.
 
 export const audienceSuggestSchema = z.object({
   audiences: z.array(z.string()),
@@ -28,28 +25,35 @@ export const generateSchema = z.object({
 });
 
 
-/** Stages 1 and 2: research the upload and extract its DNA. */
-export const readSchema = z.object({
+/** Prompt 1 — Research. */
+export const researchSchema = z.object({
   recognized: z.boolean(),
-  details: z.array(z.string()),
-  meaning: z.string(),
-  why_different: z.string(),
-  conditions: z.string(),
-  unknowns: z.array(z.string()),
-  mechanics: z.array(z.object({
+  core_sequence: z.string(),
+  why_it_works: z.string(),
+  conditions: z.array(z.string()),
+  uncertainties: z.array(z.string()),
+  source_details: z.array(z.string()),
+});
+
+/** Prompt 2 — Extract DNA. */
+export const dnaSchema = z.object({
+  mechanisms: z.array(z.object({
     name: z.string(),
-    chain: z.string(),
     how_it_works: z.string(),
     why_it_works: z.string(),
     needs: z.string(),
-    transferable: z.string(),
+    transferability: z.string(),
+    chain: z.string(),
   })),
 });
 
-/** Stage 3: three ideas. */
+/** Prompts 1 and 2 as later stages receive them back from the browser. */
+export const readSchema = z.object({ research: researchSchema, dna: dnaSchema.shape.mechanisms });
+
+/** Prompt 3 — Generate: the best 3 ideas. */
 export const inventSchema = z.object({ ideas: z.array(generateSchema) });
 
-/** Stage 4: the blunt stranger's verdicts. Never shown to the user. */
+/** Prompt 4 — Filter: keep or reject, desirability score, one-line reason, per idea. */
 export const filterSchema = z.object({
   verdicts: z.array(z.object({ index: z.number(), keep: z.boolean(), desirability: z.number(), reason: z.string() })),
 });
