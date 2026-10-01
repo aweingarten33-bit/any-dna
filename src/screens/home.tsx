@@ -27,7 +27,7 @@ export function Home({ topBar, busy, error, onFind, onRetry }: {
     {topBar}
     <main className="home">
       <section className="hero" aria-label="Start">
-        <h1><span className="line">What product DNA</span><br /><span className="line">should we <span className="accent">remix?</span></span></h1>
+        <h1><span className="line">Which app should</span><br /><span className="line">we <span className="accent">spin off?</span></span></h1>
       </section>
       {busy && <div className="home-card"><div className="turn ai"><div className="ai-body"><span className="ai-label">One moment</span><p>Finding it on the App Store…</p></div></div></div>}
       {error && <div className="home-card"><div className="turn ai"><div className="ai-body">

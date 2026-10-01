@@ -1,29 +1,33 @@
-// The blueprint: one swipeable card per section.
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, ExternalLink, Users } from 'lucide-react';
+// The blueprint: one swipeable panel per section.
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, X } from 'lucide-react';
 import { AppIcon, Rating, Source, price } from '@/components/bits';
 import type { Blueprint, FitComponent } from '../../supabase/functions/_shared/types.ts';
 
 const CARDS = ['DNA', 'What survives and what breaks', 'The idea', 'Competitors', 'MVP', 'Verdict'] as const;
+const SHORT = ['DNA', 'Fit', 'Idea', 'Rivals', 'MVP', 'Verdict'];
+const NEXT = ['DNA', 'What survives', 'The idea', 'Competitors', 'MVP', 'Verdict'];
 
 const LABELS: Record<string, string> = {
-  core_loop: 'Core loop', frequency_required: 'Frequency needed', reward_type: 'Reward', retention_lever: 'What brings people back',
+  core_loop: 'Core loop', frequency_required: 'Frequency', reward_type: 'Reward', retention_lever: 'Brings people back',
   monetization_trigger: 'When people pay', network_effect: 'Network effect',
 };
 
-function Card({ index, title, source, children }: { index: number; title: string; source: ReactNode; children: ReactNode }) {
-  return <article className="bp-card" aria-roledescription="card" aria-label={`${index + 1} of ${CARDS.length}: ${title}`}>
-    <header className="bp-card-head">
-      <span className="bp-card-n">{index + 1} / {CARDS.length}</span>
-      <h2>{title}</h2>
-      <div className="bp-sources">{source}</div>
-    </header>
-    <div className="bp-card-body">{children}</div>
+function Panel({ index, active, title, source, children }: { index: number; active: boolean; title: string; source: ReactNode; children: ReactNode }) {
+  return <article className={`bp-panel${active ? ' is-active' : ''}`} aria-roledescription="card" aria-label={`${index + 1} of ${CARDS.length}: ${title}`} aria-hidden={!active}>
+    <div className="bp-panel-inner">
+      <header className="bp-panel-head">
+        <span className="bp-panel-num" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+        <h2>{title}</h2>
+        <div className="bp-panel-sources">{source}</div>
+      </header>
+      <div className="bp-panel-body">{children}</div>
+    </div>
   </article>;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="bp-field"><dt>{label}</dt><dd>{children}</dd></div>;
+function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
+  return <div className={`field${wide ? ' is-wide' : ''}`}><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
 const STATUS: Record<FitComponent['status'], string> = { survives: 'Survives', adapts: 'Adapts', breaks: 'Breaks' };
@@ -49,104 +53,127 @@ export function Result({ blueprint, onDifferentAudience, onStartOver }: { bluepr
     setActive(target);
   }
 
+  const counts = { survives: 0, adapts: 0, breaks: 0 };
+  fit_check.components.forEach((row) => { counts[row.status] += 1; });
   const carryover = gaps.repeated_complaints.filter((complaint) => complaint.about === 'mechanic');
-  const terms = idea.search_terms.map((term) => `“${term}”`).join(', ');
+  const isGo = verdict.go_no_go === 'go';
+  const checks: Array<[boolean, string]> = [
+    [verdict.checks.understandable, 'Clear after one read'],
+    [verdict.checks.mechanic_load_bearing, 'The core loop does real work'],
+    [!verdict.checks.already_exists, verdict.checks.already_exists ? 'Already on the App Store' : 'Not already on the App Store'],
+    [!verdict.checks.gimmick, verdict.checks.gimmick ? 'Has a gimmick' : 'No gimmicks'],
+  ];
 
   return <section className="blueprint">
-    <div className="bp-meta"><AppIcon app={app} size={28} /><span>{app.name}</span><ArrowRight size={14} /><span>{audience}</span></div>
+    <div className="bp-top">
+      <div className="bp-route"><AppIcon app={app} size={22} /><span>{app.name}</span><ArrowRight size={13} /><span>{audience}</span></div>
+      <nav className="segments" aria-label="Blueprint sections">
+        {CARDS.map((title, i) => <button key={title} type="button" className={i < active ? 'is-past' : i === active ? 'is-on' : ''} onClick={() => go(i)} aria-label={title} aria-current={i === active}>
+          <i /><span>{SHORT[i]}</span>
+        </button>)}
+      </nav>
+    </div>
+
     <div className="bp-track" ref={track} tabIndex={0} onKeyDown={(event) => {
       if (event.key === 'ArrowRight') { event.preventDefault(); go(active + 1); }
       if (event.key === 'ArrowLeft') { event.preventDefault(); go(active - 1); }
     }}>
-      <Card index={0} title="DNA" source={<Source />}>
-        <p className="bp-lede">Why {app.name} works, with its topic stripped away. Read from its App Store listing and {reviews.low_star_count} recent 1 to 3 star reviews.</p>
-        <dl className="bp-fields">
-          {Object.entries(LABELS).map(([key, label]) => <Field key={key} label={label}>{dissect[key as keyof typeof LABELS & keyof typeof dissect] as string}</Field>)}
-          {dissect.dependencies.length > 0 && <Field label="Needs"><ul>{dissect.dependencies.map((item) => <li key={item}>{item}</li>)}</ul></Field>}
-          <Field label="Why it works">{dissect.why_it_works}</Field>
-          {dissect.unknowns.length > 0 && <Field label="Unknown from this data"><ul>{dissect.unknowns.map((item) => <li key={item}>{item}</li>)}</ul></Field>}
+      <Panel index={0} active={active === 0} title="DNA" source={<Source />}>
+        <p className="lede">Why {app.name} works, with its topic stripped away. Read from the App Store listing and {reviews.low_star_count} recent 1 to 3 star reviews.</p>
+        <blockquote className="pull">{dissect.why_it_works}</blockquote>
+        <dl className="bento-fields">
+          {Object.entries(LABELS).map(([key, label]) => <Field key={key} label={label} wide={key === 'core_loop'}>{dissect[key as keyof typeof LABELS & keyof typeof dissect] as string}</Field>)}
+          {dissect.dependencies.length > 0 && <Field label="Needs" wide><ul className="ticks">{dissect.dependencies.map((item) => <li key={item}>{item}</li>)}</ul></Field>}
+          {dissect.unknowns.length > 0 && <Field label="Unknown from this data" wide><ul className="ticks is-muted">{dissect.unknowns.map((item) => <li key={item}>{item}</li>)}</ul></Field>}
         </dl>
-      </Card>
+      </Panel>
 
-      <Card index={1} title="What survives and what breaks" source={<Source />}>
-        <p className="bp-lede">Does the audience already have the behavior each piece needs?</p>
+      <Panel index={1} active={active === 1} title="What survives and what breaks" source={<Source />}>
+        <p className="lede">For {audience.toLowerCase()}: does this audience already have the behavior each piece needs?</p>
+        <div className="tally">
+          {(['survives', 'adapts', 'breaks'] as const).map((status) => <div key={status} className={`tally-cell is-${status}`}><b>{counts[status]}</b><span>{STATUS[status]}</span></div>)}
+        </div>
         <ul className="fit-list">
-          {fit_check.components.map((row) => <li key={row.component} className={`fit-${row.status}`}>
-            <div className="fit-top"><b>{LABELS[row.component] ?? row.component}</b><span className={`fit-badge is-${row.status}`}>{STATUS[row.status]}</span></div>
-            <p className="fit-behavior"><Users size={14} aria-hidden="true" /> {row.audience_behavior}</p>
+          {fit_check.components.map((row) => <li key={row.component} className={`is-${row.status}`}>
+            <div className="fit-top"><b>{LABELS[row.component] ?? row.component}</b><span className="fit-badge">{STATUS[row.status]}</span></div>
+            <p className="fit-behavior">{row.audience_behavior}</p>
             <p>{row.reason}</p>
-            {row.replacement && <p className="fit-replacement"><ArrowRight size={14} aria-hidden="true" /> {row.replacement}</p>}
+            {row.replacement && <p className="fit-replacement"><ArrowRight size={14} aria-hidden="true" /><span>{row.replacement}</span></p>}
           </li>)}
         </ul>
-      </Card>
+      </Panel>
 
-      <Card index={2} title="The idea" source={<Source />}>
+      <Panel index={2} active={active === 2} title="The idea" source={<Source />}>
         <h3 className="idea-name">{idea.name}</h3>
         <p className="idea-pitch">{idea.pitch}</p>
-        <dl className="bp-fields">
+        <dl className="stack-fields">
           <Field label="Core loop">{idea.core_loop}</Field>
-          <Field label="What broke and what replaced it">{idea.what_broke_and_replaced}</Field>
-          <Field label="First session"><ol className="steps">{idea.first_session_flow.map((step, i) => <li key={i}>{step}</li>)}</ol></Field>
+          <Field label="What broke, and what replaced it">{idea.what_broke_and_replaced}</Field>
           <Field label="What makes it different">{idea.differentiator_from_gaps}</Field>
+          <Field label="First session"><ol className="timeline">{idea.first_session_flow.map((step, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span>{step}</li>)}</ol></Field>
         </dl>
-        <div className="evidence">
-          <div className="evidence-head"><b>Complaints about {app.name}</b><Source fetched>From {reviews.low_star_count} reviews</Source></div>
+        <section className="evidence">
+          <div className="evidence-head"><h4>Complaints about {app.name}</h4><Source fetched>From {reviews.low_star_count} reviews</Source></div>
           {gaps.repeated_complaints.length === 0
             ? <p className="muted">{reviews.low_star_count ? 'No complaint came up in more than one review.' : 'No 1 to 3 star reviews were available to read.'}</p>
             : <ul>{gaps.repeated_complaints.map((complaint) => <li key={complaint.theme}>
-                <div className="evidence-theme"><span>{complaint.theme}</span><b>{complaint.evidence_count} reviews</b></div>
+                <div className="evidence-theme"><span>{complaint.theme}</span><b>{complaint.evidence_count}</b></div>
                 {complaint.example && <blockquote>“{complaint.example}”</blockquote>}
                 {complaint.about === 'subject' && <small>About {app.name}’s own topic, so it doesn’t carry over.</small>}
               </li>)}</ul>}
-          {gaps.repeated_complaints.length > 0 && carryover.length === 0 && <p className="muted">None of these are about how the app works, so none carry over to the new idea.</p>}
-        </div>
-      </Card>
+          {gaps.repeated_complaints.length > 0 && carryover.length === 0 && <p className="muted">None of these are about how the app works, so none carry over.</p>}
+        </section>
+      </Panel>
 
-      <Card index={3} title="Competitors" source={<><Source fetched /><Source /></>}>
-        <p className="bp-lede">We searched the App Store for {terms} and checked {searched.length} apps.{' '}
-          {verdict.competitors.length ? 'These overlap the idea.' : 'None of them do the same job for this audience.'}</p>
-        <ul className="comp-list">
-          {verdict.competitors.map((comp) => <li key={comp.app_id}>
-            <div className="comp-top">
-              <AppIcon app={comp} size={44} />
-              <div className="comp-name"><b>{comp.name}</b><small>{comp.developer}</small></div>
-              <a href={comp.url} target="_blank" rel="noreferrer" aria-label={`Open ${comp.name} on the App Store`}><ExternalLink size={16} /></a>
+      <Panel index={3} active={active === 3} title="Competitors" source={<><Source fetched /><Source /></>}>
+        <p className="lede">Searched the App Store for {idea.search_terms.map((term, i) => <span key={term}>{i > 0 && ', '}<q>{term}</q></span>)}. Checked {searched.length} apps. {verdict.competitors.length ? `${verdict.competitors.length} overlap the idea.` : 'None do the same job for this audience.'}</p>
+        <ul className="rivals">
+          {verdict.competitors.map((comp, i) => <li key={comp.app_id}>
+            <span className="rival-n">{String(i + 1).padStart(2, '0')}</span>
+            <AppIcon app={comp} size={48} />
+            <div className="rival-main">
+              <div className="rival-name"><b>{comp.name}</b><a href={comp.url} target="_blank" rel="noreferrer" aria-label={`Open ${comp.name} on the App Store`}><ArrowUpRight size={16} /></a></div>
+              <div className="rival-facts"><Rating app={comp} /><span>{comp.category}</span></div>
+              <p>{comp.overlap}</p>
             </div>
-            <div className="comp-facts"><span>{price(comp)}</span><Rating app={comp} /><span>{comp.category}</span></div>
-            <p>{comp.overlap}</p>
+            <span className="rival-price">{price(comp)}</span>
           </li>)}
         </ul>
-        <p className="muted small">Names, prices and ratings come from the App Store. Prices are upfront prices; Apple doesn’t publish in-app or subscription prices. The overlap notes are unverified.</p>
-      </Card>
+        <p className="fine">Names, prices and ratings come from the App Store. Prices are upfront prices; Apple doesn’t publish in-app or subscription prices. Overlap notes are unverified.</p>
+      </Panel>
 
-      <Card index={4} title="MVP" source={<Source />}>
-        <p className="bp-lede">The smallest version that tests the core loop.</p>
-        <ol className="mvp-list">{verdict.mvp.map((item, i) => <li key={i}>{item}</li>)}</ol>
-        <dl className="bp-fields"><Field label="How it makes money">{verdict.monetization}</Field></dl>
-      </Card>
+      <Panel index={4} active={active === 4} title="MVP" source={<Source />}>
+        <p className="lede">The smallest version that tests the core loop.</p>
+        <ol className="mvp">{verdict.mvp.map((item, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><p>{item}</p></li>)}</ol>
+        <dl className="stack-fields"><Field label="How it makes money">{verdict.monetization}</Field></dl>
+      </Panel>
 
-      <Card index={5} title="Verdict" source={<Source />}>
-        <div className={`verdict-call is-${verdict.go_no_go}`}>{verdict.go_no_go === 'go' ? 'Go' : 'No-go'}</div>
-        <p className="verdict-reason">{verdict.reason}</p>
-        <dl className="bp-fields"><Field label="Main risk">{verdict.main_risk}</Field></dl>
-        <ul className="checks">
-          <li className={verdict.checks.understandable ? 'is-pass' : 'is-fail'}>Clear after one read</li>
-          <li className={verdict.checks.desirability >= 7 ? 'is-pass' : 'is-fail'}>Would people want it: {verdict.checks.desirability}/10</li>
-          <li className={verdict.checks.mechanic_load_bearing ? 'is-pass' : 'is-fail'}>The core loop does real work</li>
-          <li className={!verdict.checks.already_exists ? 'is-pass' : 'is-fail'}>{verdict.checks.already_exists ? 'Already exists on the App Store' : 'Not already on the App Store'}</li>
-          <li className={!verdict.checks.gimmick ? 'is-pass' : 'is-fail'}>{verdict.checks.gimmick ? 'Has a gimmick' : 'No gimmicks'}</li>
-        </ul>
-        <div className="verdict-actions">
-          <button type="button" className="btn btn-primary btn-block" onClick={onDifferentAudience} data-testid="button-different-audience">Try a different audience</button>
-          <button type="button" className="btn btn-quiet btn-block" onClick={onStartOver}>Start with another app</button>
+      <Panel index={5} active={active === 5} title="Verdict" source={<Source />}>
+        <div className={`call ${isGo ? 'is-go' : 'is-nogo'}`}>
+          <span className="call-word">{isGo ? 'Go' : 'No-go'}</span>
+          <span className="call-sub">{isGo ? 'Worth testing' : 'Not worth testing as is'}</span>
         </div>
-      </Card>
+        <p className="verdict-reason">{verdict.reason}</p>
+        <div className="desire">
+          <div className="desire-top"><span>Would people want it</span><b>{verdict.checks.desirability}<em>/10</em></b></div>
+          <div className="desire-bar" style={{ '--v': verdict.checks.desirability / 10 } as CSSProperties}><i /><span className="desire-mark" title="Needs 7 to pass" /></div>
+        </div>
+        <ul className="check-grid">
+          {checks.map(([pass, text]) => <li key={text} className={pass ? 'is-pass' : 'is-fail'}>{pass ? <Check size={16} strokeWidth={3} /> : <X size={16} strokeWidth={3} />}<span>{text}</span></li>)}
+        </ul>
+        <dl className="stack-fields"><Field label="Main risk">{verdict.main_risk}</Field></dl>
+        <div className="verdict-actions">
+          <button type="button" className="btn-pill is-primary" onClick={onDifferentAudience} data-testid="button-different-audience"><span>Try a different audience</span><ArrowRight size={18} /></button>
+          <button type="button" className="btn-pill" onClick={onStartOver}><span>Start with another app</span></button>
+        </div>
+      </Panel>
     </div>
 
-    <nav className="bp-nav" aria-label="Blueprint sections">
+    <div className="bp-nav">
       <button type="button" className="glass-round small" onClick={() => go(active - 1)} disabled={active === 0} aria-label="Previous section"><ArrowLeft size={18} /></button>
-      <div className="bp-dots">{CARDS.map((title, i) => <button key={title} type="button" className={i === active ? 'is-on' : ''} onClick={() => go(i)} aria-label={title} aria-current={i === active} />)}</div>
-      <button type="button" className="glass-round small" onClick={() => go(active + 1)} disabled={active === CARDS.length - 1} aria-label="Next section"><ArrowRight size={18} /></button>
-    </nav>
+      {active < CARDS.length - 1
+        ? <button type="button" className="bp-next" onClick={() => go(active + 1)} aria-label="Next section"><span><small>Next</small>{NEXT[active + 1]}</span><ArrowRight size={18} /></button>
+        : <span className="bp-end">End of blueprint</span>}
+    </div>
   </section>;
 }

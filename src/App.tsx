@@ -98,7 +98,8 @@ export default function App() {
         onSearchAgain={goHome} />;
       break;
     case 'to-audience':
-      body = <Divider part="Part 2 of 3" title="Who’s it for?" sub={`${screen.app.name} works. Next, pick who you want to rebuild it for.`} action="Continue"
+      body = <Divider n="02" part="Part 2 of 3" title="Who’s it for?" sub={`${screen.app.name} works. Next, pick who you want to rebuild it for.`} action="Continue"
+        band={[screen.app.name, 'Same mechanics', 'New audience']}
         onContinue={() => go({ name: 'audience', app: screen.app }, true)} />;
       break;
     case 'audience':
@@ -110,7 +111,8 @@ export default function App() {
       break;
     case 'to-result':
       bar = topBar({ left: close });
-      body = <Divider part="Part 3 of 3" title="Your blueprint is ready" sub={`${screen.idea.output_json.idea.name}: six cards, one section each. Swipe through.`} action="Show me"
+      body = <Divider n="03" part="Part 3 of 3" title="Your blueprint is ready" sub={`${screen.idea.output_json.idea.name}: six sections, one card each. Swipe through.`} action="Show me"
+        band={[screen.idea.output_json.idea.name, `For ${screen.idea.output_json.audience.toLowerCase()}`, screen.idea.output_json.verdict.go_no_go === 'go' ? 'Go' : 'No-go']}
         onContinue={() => go({ name: 'result', idea: screen.idea }, true)} />;
       break;
     case 'result':
@@ -128,6 +130,8 @@ export default function App() {
   }
 
   return <div className="app is-flow">
+    <div className="ambient" aria-hidden="true" />
+    <div className="grain" aria-hidden="true" />
     {bar}
     <main className="flow" key={screen.name}>{body}</main>
   </div>;
