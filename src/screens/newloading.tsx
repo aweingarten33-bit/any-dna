@@ -52,7 +52,7 @@ export function NewLoading({ upload, second, audience, direction, templateId, mo
     return <Screen title="Nothing passed"
       sub={`A blunt stranger tested ${progress.rejectedCount} ideas over ${MAX_ATTEMPTS} tries and turned every one down. We won’t show you a weak idea, so try changing something.`}
       actions={<>
-        <button type="button" className="btn-pill is-primary" onClick={() => onAdjust('steer')} data-testid="button-adjust-steer"><span>Try another mode or trick</span></button>
+        <button type="button" className="btn-pill is-primary" onClick={() => onAdjust('steer')} data-testid="button-adjust-steer"><span>Try another mode or template</span></button>
         <button type="button" className="btn-pill" onClick={() => onAdjust('audience')}><span>Change who it’s for or your direction</span></button>
         <button type="button" className="btn-pill" onClick={() => onAdjust('source')}><span>Drop something else</span></button>
       </>}>

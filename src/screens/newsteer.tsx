@@ -1,6 +1,7 @@
-// Optional: how far to take it (Prompt 3's modes), and a proven trick from a
-// real app (like Videoleap's template gallery). Skipping both lets the source
-// decide alone. Collide asks for a second source right here.
+// Optional: a mode (Prompt 3's modes) and a template (a pattern from a real
+// app, like Videoleap's template gallery). Kept quiet: the modes are one row
+// of chips, and the templates stay folded until asked for. Skipping both lets
+// the upload decide alone. Collide asks for a second source right here.
 import { useRef, useState, type CSSProperties } from 'react';
 import { ArrowBigUp, Camera, Check, FileText, Film, Flame, Footprints, Gavel, Heart, Image as ImageIcon, MapPin, Music, Puzzle, Receipt, Route, ScanSearch, Sparkles, Timer, Users, type LucideIcon } from 'lucide-react';
 import { Screen } from '@/components/bits';
@@ -12,11 +13,11 @@ import type { Upload } from '../../server/lib/types.ts';
 
 /** Prompt 3's modes, in plain words. */
 export const MODES: Array<{ id: Exclude<Mode, null>; name: string; line: string }> = [
-  { id: 'repurpose', name: 'Repurpose', line: 'Move the whole thing into a world that looks nothing like it.' },
-  { id: 'x1000', name: '×1000', line: 'Push its main trick to the extreme until it’s a different product.' },
-  { id: 'future', name: '30 years from now', line: 'Picture it in 2056, then build the first step today.' },
-  { id: 'angle', name: 'Different angle', line: 'Question what it really does, and build from that.' },
-  { id: 'collide', name: 'Collide', line: 'Mix one trick from this with one from something else.' },
+  { id: 'repurpose', name: 'Repurpose', line: 'Moves the whole thing into a world that looks nothing like it.' },
+  { id: 'x1000', name: '×1000', line: 'Pushes its main idea to the extreme until it’s a different product.' },
+  { id: 'future', name: '30 years', line: 'Pictures it in 2056, then builds the first step today.' },
+  { id: 'angle', name: 'New angle', line: 'Questions what it really does, and builds from that.' },
+  { id: 'collide', name: 'Collide', line: 'Mixes it with a second thing you drop in.' },
 ];
 
 /** A picture for each template, like Videoleap's template thumbnails. */
@@ -101,45 +102,43 @@ export function NewSteer({ initial, initialMode, initialSecond, onPick }: {
   const [picked, setPicked] = useState<string | null>(initial);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [second, setSecond] = useState<Upload | null>(initialSecond);
+  const [showTemplates, setShowTemplates] = useState(false);
   const chosen = TEMPLATES.find((template) => template.id === picked);
+  const chosenMode = MODES.find((item) => item.id === mode);
   const needsSecond = mode === 'collide' && !second;
-  const label = needsSecond ? 'Add a second source' : chosen ? `Use “${chosen.name}”` : mode ? 'Invent it' : 'Skip, use my upload';
-  return <Screen title="How should it think?"
-    sub="Optional. Pick a mode, add a proven trick from a real app, or skip both and let your upload decide."
+  return <Screen title="Any extras?"
+    sub="Both optional. Skip to let your upload decide."
     actions={<button type="button" className="btn-pill is-primary" disabled={needsSecond}
       onClick={() => onPick(picked, mode, mode === 'collide' ? second : null)} data-testid="button-steer">
-      <span>{label}</span>
+      <span>{needsSecond ? 'Add the second thing' : chosen || mode ? 'Invent it' : 'Skip'}</span>
     </button>}>
     <h3 className="sub-head">Mode</h3>
-    <ul className="mode-list" role="radiogroup" aria-label="Mode">
-      <li><button type="button" role="radio" aria-checked={mode === null} className={`mode-row${mode === null ? ' is-on' : ''}`} onClick={() => setMode(null)}>
-        <b>Standard</b><span>Find where its pattern already works and build there.</span>
-      </button></li>
-      {MODES.map((item) => <li key={item.id}>
-        <button type="button" role="radio" aria-checked={mode === item.id} className={`mode-row${mode === item.id ? ' is-on' : ''}`} onClick={() => setMode(mode === item.id ? null : item.id)} data-testid={`mode-${item.id}`}>
-          <b>{item.name}</b><span>{item.line}</span>
-        </button>
-      </li>)}
-    </ul>
+    <div className="mode-chips" role="radiogroup" aria-label="Mode">
+      {MODES.map((item) => <button key={item.id} type="button" role="radio" aria-checked={mode === item.id} className={`mode-chip${mode === item.id ? ' is-on' : ''}`}
+        onClick={() => setMode(mode === item.id ? null : item.id)} data-testid={`mode-${item.id}`}>{item.name}</button>)}
+    </div>
+    {chosenMode && <p className="mode-line">{chosenMode.line}</p>}
     {mode === 'collide' && <SecondSource value={second} onChange={setSecond} />}
-    <h3 className="sub-head">Proven trick</h3>
-    <ul className="tpl-grid" role="radiogroup" aria-label="Templates">
-      <li className="fade" style={{ '--d': '260ms' } as CSSProperties}>
-        <button type="button" role="radio" aria-checked={picked === null} className={`tpl-card is-auto${picked === null ? ' is-on' : ''}`} onClick={() => setPicked(null)}>
-          <span className="tpl-top"><Sparkles size={18} /><span className="tpl-tick" aria-hidden="true"><Check size={14} strokeWidth={3} /></span></span>
-          <b>No trick</b>
-          <p>The idea comes only from what you dropped in.</p>
+    <h3 className="sub-head">Template</h3>
+    {!showTemplates
+      ? <button type="button" className="tpl-toggle" onClick={() => setShowTemplates(true)} data-testid="button-templates">
+          <span>{chosen ? <>{chosen.name} <small>like {chosen.sourceApp}</small></> : 'Add a template'}</span><b>{chosen ? 'Change' : 'Browse'}</b>
         </button>
-      </li>
-      {TEMPLATES.map((template, i) => <li key={template.id} className="fade" style={{ '--d': `${300 + i * 35}ms` } as CSSProperties}>
-        <button type="button" role="radio" aria-checked={picked === template.id} className={`tpl-card${picked === template.id ? ' is-on' : ''}`}
-          onClick={() => setPicked(picked === template.id ? null : template.id)}>
-          <Thumb template={template} />
-          <span className="tpl-top"><small>Like {template.sourceApp}</small><span className="tpl-tick" aria-hidden="true"><Check size={14} strokeWidth={3} /></span></span>
-          <b>{template.name}</b>
-          <p>{template.trick}</p>
-        </button>
-      </li>)}
-    </ul>
+      : <ul className="tpl-grid" role="radiogroup" aria-label="Templates">
+          <li><button type="button" role="radio" aria-checked={picked === null} className={`tpl-card is-auto${picked === null ? ' is-on' : ''}`} onClick={() => { setPicked(null); setShowTemplates(false); }}>
+            <span className="tpl-top"><Sparkles size={18} /><span className="tpl-tick" aria-hidden="true"><Check size={14} strokeWidth={3} /></span></span>
+            <b>No template</b>
+            <p>The idea comes only from what you dropped in.</p>
+          </button></li>
+          {TEMPLATES.map((template) => <li key={template.id}>
+            <button type="button" role="radio" aria-checked={picked === template.id} className={`tpl-card${picked === template.id ? ' is-on' : ''}`}
+              onClick={() => { setPicked(template.id); setShowTemplates(false); }}>
+              <Thumb template={template} />
+              <span className="tpl-top"><small>Like {template.sourceApp}</small><span className="tpl-tick" aria-hidden="true"><Check size={14} strokeWidth={3} /></span></span>
+              <b>{template.name}</b>
+              <p>{template.trick}</p>
+            </button>
+          </li>)}
+        </ul>}
   </Screen>;
 }

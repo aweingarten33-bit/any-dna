@@ -134,7 +134,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
           <Field label="What it’s not">{idea.what_its_not}</Field>
           <Field label="Why people would keep using it">{idea.why_use}</Field>
           <Field label="Biggest risk">{idea.main_risk}</Field>
-          {template && <Field label="Proven trick built in">{template.name}, like {template.sourceApp}</Field>}
+          {template && <Field label="Template used">{template.name}, like {template.sourceApp}</Field>}
           {modeName && <Field label="Mode">{modeName}{blueprint.second ? `, with ${blueprint.second.label}` : ''}</Field>}
         </dl>
       </Panel>

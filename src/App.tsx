@@ -1,5 +1,5 @@
 // One screen at a time.
-// home (drop anything) → who's it for + describe it → mode and trick (optional)
+// home (drop anything) → who's it for + describe it → mode and template (optional)
 // → inventing (the four canonical prompts) → pick one of the kept ideas → result
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';

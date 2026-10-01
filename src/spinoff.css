@@ -704,17 +704,21 @@
 .aud-row { padding-left: 4px; }
 .drop-row .btn-pill svg, .btn-pill svg { flex: none; }
 
-/* Mode picker (Prompt 3's modes) and Collide's second source. */
-.mode-list { display: grid; gap: 8px; margin: 10px 0 22px; }
-.mode-row {
-  display: grid; gap: 3px; width: 100%; min-height: 44px; padding: 12px 14px; text-align: left; border-radius: 14px;
-  background: rgba(238, 241, 248, 0.04); border: 1px solid var(--hair-2); color: var(--paper-2);
-  transition: border-color 0.2s, background 0.2s;
+/* Mode chips (Prompt 3's modes), the folded template picker, and Collide's second source. */
+.mode-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.mode-chip {
+  min-height: 44px; padding: 0 16px; border-radius: 999px; font-size: 15px; font-weight: 500;
+  background: rgba(238, 241, 248, 0.04); border: 1px solid var(--hair-2); color: var(--paper-2); transition: border-color 0.2s, background 0.2s, color 0.2s;
 }
-.mode-row b { font-size: 15.5px; font-weight: 600; color: var(--paper); }
-.mode-row span { font-size: 13.5px; line-height: 1.45; }
-.mode-row.is-on { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.14); }
-.second-source { display: grid; gap: 12px; margin: -8px 0 24px; padding: 14px; border-radius: 16px; border: 1px dashed var(--hair-2); }
+.mode-chip.is-on { color: var(--paper); border-color: #8b5cf6; background: rgba(139, 92, 246, 0.18); }
+.mode-line { margin-top: 10px; font-size: 14px; line-height: 1.45; color: var(--paper-2); }
+.tpl-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 52px; margin-top: 10px; padding: 0 16px;
+  border-radius: 14px; background: rgba(238, 241, 248, 0.04); border: 1px solid var(--hair-2); color: var(--paper); font-size: 15px; text-align: left;
+}
+.tpl-toggle small { color: var(--paper-3); font-size: 13px; margin-left: 4px; }
+.tpl-toggle b { flex: none; font-size: 14px; font-weight: 500; color: var(--paper-2); }
+.second-source { display: grid; gap: 12px; margin: 14px 0 0; padding: 14px; border-radius: 16px; border: 1px dashed var(--hair-2); }
 .second-source .drop-row { justify-content: flex-start; flex-wrap: wrap; }
 .second-k { font-size: 13px; color: var(--paper-3); }
 .second-source.is-set { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-style: solid; }
