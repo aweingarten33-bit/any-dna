@@ -11,7 +11,7 @@
 //   AI_CALLS_PER_DAY      limit across all visitors (default 300)
 //   PASS_WAIT_MS          how long one request waits on a pass before answering "pending" (default 20000)
 import { serveDir, serveFile } from 'jsr:@std/http@^1/file-server';
-import { getReviews, resolveApp, runPass } from './lib/handlers.ts';
+import { getReviews, resolveApp, runPass, flowPass } from './lib/handlers.ts';
 import { migrate } from './lib/cache.ts';
 
 const ROUTES: Record<string, (req: Request) => Promise<Response>> = {
@@ -19,7 +19,7 @@ const ROUTES: Record<string, (req: Request) => Promise<Response>> = {
   'get-reviews': getReviews,
 };
 
-// ---- Rate limits on AI calls (run-pass is the only route that calls the AI) ----
+// ---- Rate limits on AI calls (run-pass and flow-pass are the routes that call the AI) ----
 
 const PER_VISITOR = Number(Deno.env.get('AI_CALLS_PER_HOUR') ?? 30);
 const PER_DAY = Number(Deno.env.get('AI_CALLS_PER_DAY') ?? 300);
@@ -56,8 +56,9 @@ export async function handle(req: Request, info: Deno.ServeHandlerInfo): Promise
 
   const route = url.pathname.match(/^\/api\/([\w-]+)$/)?.[1];
   if (route !== undefined) {
-    // run-pass counts against the AI limit only when it starts a new job, not when it checks on one.
+    // run-pass and flow-pass count against the AI limit only when they start a new job, not when they check on one.
     if (route === 'run-pass') return runPass(req, () => takeAiCall(visitorId(req, info)));
+    if (route === 'flow-pass') return flowPass(req, () => takeAiCall(visitorId(req, info)));
     const handler = ROUTES[route];
     if (!handler) return Response.json({ error: 'Not found' }, { status: 404 });
     return handler(req);

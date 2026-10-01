@@ -8,8 +8,11 @@
 // Competitors are found in plain code (itunes.ts), not by the AI.
 // Everything is written for a normal person: see WRITING.
 import { structuredCall } from './ai.ts';
-import { buildSchema, dissectSchema, gapsModelSchema, kitSchema, planSchema } from './schemas.ts';
+import { audienceSuggestSchema, buildSchema, dissectSchema, gapsModelSchema, generateSchema, headlineSchema, kitSchema, planSchema } from './schemas.ts';
 import type { AppListing, BusinessPlan, CompetitorListing, Dissect, Gaps, Idea, Kit, Review } from './types.ts';
+import type { UserContent } from './ai.ts';
+import { templateById } from './templates.ts';
+import type { z } from 'npm:zod@^4.1.0';
 
 const RULES = `You are one step in Spinoff. Spinoff takes an app that already works and turns what makes it work into a new app for a different group of people.
 
@@ -174,13 +177,16 @@ Fields:
   };
 }
 
-function ideaBlock(idea: Idea, audience: string) {
+/** The fields kit/plan need from an idea, old shape or new. */
+export type KitIdea = { name: string; pitch: string; who_its_for: string; how_it_works: string[]; mvp: string[]; monetization: string; main_risk: string };
+
+function ideaBlock(idea: KitIdea, audience: string) {
   return `Audience: ${audience}\n\nThe app:\n${JSON.stringify({ name: idea.name, pitch: idea.pitch, who_its_for: idea.who_its_for, how_it_works: idea.how_it_works, mvp: idea.mvp, monetization: idea.monetization, main_risk: idea.main_risk }, null, 2)}`;
 }
 
 // ---- kit: what the main screen shows, and a build plan ------------------
 
-export async function runKit(idea: Idea, audience: string): Promise<Kit> {
+export async function runKit(idea: KitIdea, audience: string): Promise<Kit> {
   const kit = await structuredCall({
     schema: kitSchema,
     effort: 'low',
@@ -213,7 +219,7 @@ plan: 4 steps to build and test the first version, for one person using an AI ap
 
 // ---- plan: the business plan, made on request ----------------------------
 
-export function runPlan(idea: Idea, audience: string, competitors: CompetitorListing[]): Promise<BusinessPlan> {
+export function runPlan(idea: KitIdea, audience: string, competitors: CompetitorListing[]): Promise<BusinessPlan> {
   const listed = competitors.slice(0, 8).map((app) => ({ name: app.name, upfront_price: app.formatted_price || 'unknown', rating: app.rating, rating_count: app.rating_count }));
   return structuredCall({
     schema: planSchema,
@@ -246,4 +252,156 @@ Fields:
     milestones: plan.milestones.slice(0, 5),
     risks: plan.risks.slice(0, 3),
   }));
+}
+
+// ---- The new front door: ideas from the upload itself ----------------------
+// The user drops anything (photo, document, typed words) and names an
+// audience. No source app, no DNA extraction. Uploads are never stored:
+// the bytes travel with each request and live only in that request.
+
+export type UploadInput =
+  | { kind: 'text'; text: string; label: string }
+  | { kind: 'photo'; dataUrl: string; label: string }
+  | { kind: 'pdf'; dataUrl: string; label: string };
+
+/** The upload as Muse content parts: the text lead, then any media. */
+function uploadContent(upload: UploadInput, lead: string): UserContent[] {
+  const parts: UserContent[] = [{ type: 'text', text: lead }];
+  if (upload.kind === 'photo') parts.push({ type: 'image', dataUrl: upload.dataUrl });
+  if (upload.kind === 'pdf') parts.push({ type: 'file', dataUrl: upload.dataUrl, filename: upload.label });
+  return parts;
+}
+
+function uploadLead(upload: UploadInput): string {
+  if (upload.kind === 'text') return `The user described something in words (instead of uploading a file):\n\n${upload.text}`;
+  if (upload.kind === 'photo') return `The user uploaded a photo (${upload.label}). It is attached after this text.`;
+  return `The user uploaded a document (${upload.label}). It is attached after this text.`;
+}
+
+const PEOPLE_RULE = `If the upload shows people, describe situations, never looks or identity.`;
+
+function namesRule(): string {
+  return `Never use trademarked or real names in the product (no song titles, lyrics, artist names, brands, or real people's names). Use the feeling, not the name.`;
+}
+
+// ---- suggest: who is it for ------------------------------------------------
+
+export async function runAudienceSuggest(upload: UploadInput): Promise<{ audiences: string[] }> {
+  const { audiences } = await structuredCall({
+    schema: audienceSuggestSchema,
+    effort: 'low',
+    system: `${RULES}
+
+${WRITING}
+
+Your job: look at what the user uploaded and suggest 4 to 6 audiences who would care about an app inspired by it.
+- Short labels, 1 to 3 words each, like "New parents" or "Marathon runners".
+- Different kinds of people, not variations of one.
+- ${PEOPLE_RULE}`,
+    user: uploadContent(upload, `${uploadLead(upload)}\n\nWho would care about an app inspired by this?`),
+  });
+  return { audiences: audiences.map((audience) => audience.trim()).filter(Boolean).slice(0, 6) };
+}
+
+// ---- headline: the name and tagline, fast -----------------------------------
+
+export async function runHeadline(upload: UploadInput, audience: string): Promise<{ name: string; tagline: string }> {
+  const headline = await structuredCall({
+    schema: headlineSchema,
+    effort: 'low',
+    system: `${RULES}
+
+${WRITING}
+
+You are an inventor. The user uploaded something and named an audience: ${audience}. Name the app they would build from it.
+
+Read the upload literally and figuratively: what is actually in it, and what does it mean underneath — the feeling, the story, the tension, the change? Go past the obvious theme. Find the small, specific thing that makes it interesting, not the general topic.
+
+Then name the product:
+- name: short and memorable, 1 to 3 words. ${namesRule()}
+- tagline: one sentence, under 15 words. What it does for whom. A friend should get it instantly.
+
+${PEOPLE_RULE}`,
+    user: uploadContent(upload, `${uploadLead(upload)}\n\nAudience: ${audience}\n\nName the app.`),
+  });
+  return { name: headline.name.trim(), tagline: headline.tagline.trim() };
+}
+
+// ---- generate: the full blueprint --------------------------------------------
+
+const EXAMPLES = `Two examples of the quality wanted. Match their depth. Never reuse their names, words or ideas; every upload must produce its own pattern.
+
+Example 1: the song Kiss from a Rose → ROSE / GRAY
+- Reading: not romance. Something small and beautiful breaks through a gray state and changes how everything feels.
+- Pattern: GRAY STATE → SMALL THING ENTERS → PERCEPTION CHANGES → YOU WANT TO KNOW WHY
+- Job: when something makes my life better, figure out what it was and help me do it again.
+- App: tap "That helped" when your mood lifts. The app learns what came before it and gives one suggestion when you feel gray.
+- Callbacks: Gray = how you feel now. Rose = a small thing that helps. Rose Garden = everything that works for you.
+
+Example 2: the Superman theme music → TAKEOFF
+- Reading: the music itself builds from anticipation to lift to confident arrival.
+- Pattern: ANTICIPATION → MOTION → LIFT → CONFIDENCE → ARRIVAL
+- Job: get me started on something I'm avoiding.
+- App: type the task you're avoiding. The app gives one tiny first step, then slightly bigger ones as you build momentum. One "Up" button gives the next step.
+- Callbacks: Runway = before you start. Lift = first real action. Flight = a focused work session. Flight Log = what you finished.`;
+
+export async function runGenerate(
+  upload: UploadInput,
+  audience: string,
+  headline: { name: string; tagline: string },
+  templateId?: string,
+): Promise<z.infer<typeof generateSchema>> {
+  const template = templateById(templateId);
+  const steer = template
+    ? `\n\nSteer it with this proven trick from ${template.sourceApp} ("${template.name}"): ${template.trick} Use it as one ingredient, not the whole app. The upload still supplies the pattern.`
+    : '';
+  const generated = await structuredCall({
+    schema: generateSchema,
+    effort: 'medium',
+    system: `${RULES}
+
+${WRITING}
+
+You are an inventor. The user uploaded something and named an audience: ${audience}. Turn it into a real app people would use, one that someone who knows the upload would recognize.
+
+Work through these steps privately, then write the answer.
+
+1. Read it, literally and figuratively. What is actually in it? What does it mean underneath: the feeling, the story, the tension, the change that happens? Go past the obvious theme.
+2. Find the pattern. Write it as a short chain (like GRAY STATE → SMALL THING ENTERS → PERCEPTION CHANGES → YOU WANT TO KNOW WHY). Strip away the topic. Keep the pattern that would still work somewhere else.
+3. Find the real job. Where does that pattern happen again and again in the lives of ${audience}? Write the job in one sentence a normal person gets immediately.
+4. Design the app. One core interaction that fits on one screen. What the person does, and what the app does back. Why it beats what exists, naming the boring version you're NOT building. One killer feature. A first version one person could build.
+5. Build in the callback. Turn details from the upload into the product's own words and features. Add one feature from a specific detail, not the general theme. ${namesRule()}
+6. Check it like a blunt stranger. Would a normal person get it in 5 seconds and want to show someone? Would they use it more than once? If you remove the pattern and the app works the same, start over. If it could come from any similar upload, start over. If it's a generic AI assistant, chatbot, dashboard, habit tracker, journal or checklist, start over.
+
+${EXAMPLES}
+
+${PEOPLE_RULE}
+
+The name and tagline are decided — keep them exactly: "${headline.name}" / "${headline.tagline}".
+
+Fields:
+- name: exactly "${headline.name}".
+- tagline: exactly "${headline.tagline}".
+- what_it_is: 2 or 3 sentences. What the app really is.
+- pattern: the chain, like GRAY STATE → SMALL THING ENTERS → PERCEPTION CHANGES → YOU WANT TO KNOW WHY.
+- job: one sentence a normal person gets immediately.
+- how_it_works: 3 or 4 steps. Each step starts with "You" (what the person does) or "The app" (what it does back).
+- killer_feature: the one feature that makes it special, ideally from a specific detail of the upload. One or two sentences.
+- callbacks: each detail from the upload and what it means in the app. 3 to 5 items. detail: the upload detail in a few words. meaning: what it means in the product, one sentence.
+- what_its_not: the boring version you're NOT building. One or two sentences.
+- why_use: why people would use it more than once. One or two sentences.
+- mvp: 3 to 5 features for the first version, a few words each.
+- monetization: how it makes money, one or two sentences. Don't state market prices: you have no price data.
+- search_terms: 3 or 4 short phrases someone in this audience would type into the App Store to find an app that does this job. Not the product name.`,
+    user: uploadContent(upload, `${uploadLead(upload)}\n\nAudience: ${audience}${steer}\n\nWrite the full blueprint.`),
+  });
+  return {
+    ...generated,
+    name: headline.name,
+    tagline: headline.tagline,
+    how_it_works: generated.how_it_works.map((step) => step.trim()).filter(Boolean).slice(0, 5),
+    callbacks: generated.callbacks.slice(0, 5),
+    mvp: generated.mvp.map((item) => item.trim()).filter(Boolean).slice(0, 5),
+    search_terms: generated.search_terms.map((term) => term.trim()).filter(Boolean).slice(0, 4),
+  };
 }

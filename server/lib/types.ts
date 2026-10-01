@@ -148,6 +148,53 @@ export type Blueprint = {
   plan?: BusinessPlan;
 };
 
+// ---- The new front door: ideas from the upload itself ------------------------
+
+/** What the user dropped in. The bytes travel with each request and are never stored. */
+export type Upload =
+  | { kind: 'text'; text: string; label: string }
+  | { kind: 'photo'; dataUrl: string; label: string }
+  | { kind: 'pdf'; dataUrl: string; label: string };
+
+/** The full output of the new generate pass. */
+export type GeneratedIdea = {
+  name: string;
+  tagline: string;
+  what_it_is: string;
+  pattern: string;
+  job: string;
+  how_it_works: string[];
+  killer_feature: string;
+  callbacks: Array<{ detail: string; meaning: string }>;
+  what_its_not: string;
+  why_use: string;
+  mvp: string[];
+  monetization: string;
+  search_terms: string[];
+};
+
+export type NewPassName = 'suggest' | 'headline' | 'generate' | 'compete' | 'kit' | 'plan';
+
+/** Everything one new-flow run produces. */
+export type NewBlueprint = {
+  /** 3 for the upload-first rewrite. */
+  version: 3;
+  upload: { kind: Upload['kind']; label: string };
+  audience: string;
+  /** The template id when the user steered it, or null for "surprise me" / skipped. */
+  templateId: string | null;
+  headline: { name: string; tagline: string };
+  idea: GeneratedIdea;
+  /** Every App Store search result for the idea's search terms. */
+  searched: CompetitorListing[];
+  /** The closest of those: the apps that came up for the most searches, then the highest ranked. */
+  competitors: Competitor[];
+  /** Filled in after the run. */
+  kit?: Kit;
+  /** Made when the person asks for it. */
+  plan?: BusinessPlan;
+};
+
 export type SavedIdea = {
   id: string;
   created_at: string;

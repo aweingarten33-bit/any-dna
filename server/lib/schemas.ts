@@ -36,6 +36,37 @@ export const ideaSchema = z.object({
 
 export const buildSchema = z.object({ idea: ideaSchema });
 
+// ---- The new front door: ideas from the upload itself ----------------------
+// The user drops anything (photo, document, typed words) and names an
+// audience. No source app, no DNA extraction.
+
+export const audienceSuggestSchema = z.object({
+  audiences: z.array(z.string()),
+});
+
+export const headlineSchema = z.object({
+  name: z.string(),
+  tagline: z.string(),
+});
+
+export const generateSchema = z.object({
+  name: z.string(),
+  tagline: z.string(),
+  what_it_is: z.string(),
+  pattern: z.string(),
+  job: z.string(),
+  how_it_works: z.array(z.string()),
+  killer_feature: z.string(),
+  callbacks: z.array(z.object({ detail: z.string(), meaning: z.string() })),
+  what_its_not: z.string(),
+  why_use: z.string(),
+  mvp: z.array(z.string()),
+  monetization: z.string(),
+  search_terms: z.array(z.string()),
+});
+
+export const generateOutputSchema = z.object({ output: generateSchema });
+
 export const kitSchema = z.object({
   screen: z.object({
     title: z.string(),

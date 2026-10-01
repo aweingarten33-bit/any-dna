@@ -1,12 +1,23 @@
 // Meta Muse through the Meta Model API (Responses API).
 // Key: META_MODEL_API_KEY. Model: META_MODEL (default muse-spark-1.3).
-import { PassError, type GenerateRequest } from './ai.ts';
+import { PassError, type GenerateRequest, type UserContent } from './ai.ts';
 
 const ENDPOINT = 'https://api.meta.ai/v1/responses';
 const MODEL = Deno.env.get('META_MODEL') ?? 'muse-spark-1.3';
 
 // The contributor tier lets Meta train on prompts, which would include users' ideas.
 if (/contributor/i.test(MODEL)) throw new Error('META_MODEL must not be a contributor-tier model: it allows training on prompts.');
+
+/** A plain string becomes the user message; content parts become input_text / input_image / input_file blocks. */
+function toInput(user: GenerateRequest['user']): unknown {
+  if (typeof user === 'string') return user;
+  const content = (user as UserContent[]).map((part) => {
+    if (part.type === 'text') return { type: 'input_text', text: part.text };
+    if (part.type === 'image') return { type: 'input_image', image_url: part.dataUrl };
+    return { type: 'input_file', file_data: part.dataUrl, filename: part.filename };
+  });
+  return [{ role: 'user', content }];
+}
 
 function outputText(payload: Record<string, unknown>): string {
   if (typeof payload.output_text === 'string') return payload.output_text;
@@ -37,7 +48,7 @@ export async function museGenerate(req: GenerateRequest): Promise<{ text: string
           max_output_tokens: 8000,
           reasoning: { effort: req.effort },
           instructions: `${req.system}\n\nReturn exactly one JSON object and nothing else: no markdown, no commentary. It must match this JSON Schema:\n${JSON.stringify(req.schema)}`,
-          input: req.user,
+          input: toInput(req.user),
         }),
       });
     } catch (error) {

@@ -10,13 +10,27 @@ import { museGenerate } from './muse.ts';
 
 export type Effort = 'low' | 'medium' | 'high';
 
+/** One piece of a user message. Text, or media carried as a data URL. */
+export type UserContent =
+  | { type: 'text'; text: string }
+  | { type: 'image'; dataUrl: string }
+  | { type: 'file'; dataUrl: string; filename: string };
+
 export type GenerateRequest = {
   system: string;
-  user: string;
+  /** Plain text, or text plus image/file parts for multimodal calls. */
+  user: string | UserContent[];
   /** JSON Schema the reply must match. */
   schema: Record<string, unknown>;
   effort: Effort;
 };
+
+/** Splits a data: URL into its MIME type and base64 body. */
+export function splitDataUrl(dataUrl: string): { mime: string; base64: string } {
+  const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl);
+  if (!match) throw new PassError('An upload arrived in a format the server could not read.');
+  return { mime: match[1] || 'application/octet-stream', base64: match[3] };
+}
 
 /** A failure the user should see as-is (bad key, refusal, invalid output). */
 export class PassError extends Error {}
@@ -46,7 +60,7 @@ export function extractJson(text: string): unknown {
 
 export async function structuredCall<T extends z.ZodType>(opts: {
   system: string;
-  user: string;
+  user: string | UserContent[];
   schema: T;
   effort?: Effort;
 }): Promise<z.infer<T>> {
@@ -56,7 +70,10 @@ export async function structuredCall<T extends z.ZodType>(opts: {
   let user = opts.user;
   let lastError = '';
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (attempt === 1) user = `${opts.user}\n\nYour previous reply was rejected: ${lastError}\nReturn only JSON that matches the schema.`;
+    if (attempt === 1) {
+      const note = `\n\nYour previous reply was rejected: ${lastError}\nReturn only JSON that matches the schema.`;
+      user = typeof user === 'string' ? `${user}${note}` : [...user, { type: 'text' as const, text: note }];
+    }
     const reply = await generate({ system: opts.system, user, schema, effort: opts.effort ?? 'medium' });
     if (reply.truncated) { lastError = 'the reply was cut off at the length limit'; continue; }
     let json: unknown;

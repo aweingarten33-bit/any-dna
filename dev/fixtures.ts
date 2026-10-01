@@ -107,6 +107,36 @@ const PARTS: Record<string, any> = {
     milestones: [{ when: 'Day 30', goal: 'First version live.' }, { when: 'Day 60', goal: '50 households.' }, { when: 'Day 90', goal: '100 households, 5 paying.' }],
     risks: [{ risk: 'People stop logging.', plan: 'A gentle evening reminder only when nobody logged.' }],
   },
+  // The new front door: ideas from the upload itself.
+  suggest: {
+    audiences: ['Concertgoers', 'Festival crews', 'Sports fans', 'Theme park families'],
+  },
+  headline: {
+    name: 'Crowdlight',
+    tagline: 'Find your friends in any crowd, fast.',
+  },
+  generate: {
+    name: 'Crowdlight',
+    tagline: 'Find your friends in any crowd, fast.',
+    what_it_is: 'Crowdlight is a friend-finder for concerts and festivals. You see your crew as glowing dots on a simple map of the venue, so regrouping takes seconds.',
+    pattern: 'SEPARATED → SIGNAL → REGROUP',
+    job: 'When I lose my friends in a crowd, get us back together fast.',
+    how_it_works: [
+      'You open Crowdlight and see your crew as dots on the venue map.',
+      'You tap "Beacon" and your dot pulses so friends can spot you.',
+      'The app suggests a meeting point halfway between everyone.',
+    ],
+    killer_feature: 'The beacon: one tap makes your dot pulse on everyone\u2019s map, with no texting needed.',
+    callbacks: [
+      { detail: 'losing friends in the crowd', meaning: 'The whole app is about getting the crew back together.' },
+      { detail: 'concert', meaning: 'It is built for loud places where you cannot hear your phone.' },
+    ],
+    what_its_not: 'Not a general friend tracker that runs all day and drains your battery.',
+    why_use: 'You use it every time you go out with a group, because losing people keeps happening.',
+    mvp: ['Crew dots on a venue map', 'Beacon pulse', 'Halfway meeting point', 'Battery-saver mode'],
+    monetization: 'Free for crews. Venues pay for crowd-flow maps.',
+    search_terms: ['find friends at concerts', 'concert buddy locator', 'festival crew map'],
+  },
 };
 
 // deno-lint-ignore no-explicit-any
@@ -116,12 +146,18 @@ export const PASS_FIXTURES: Record<string, any> = {
   build: { idea: PARTS.mutate },
   kit: PARTS.kit,
   plan: PARTS.plan,
+  suggest: PARTS.suggest,
+  headline: PARTS.headline,
+  generate: PARTS.generate,
 };
 
 function whichPass(system: string) {
   if (system.includes('find the tricks inside it')) return 'dissect';
   if (system.includes('find the complaints that repeat')) return 'gaps';
   if (system.includes('You design one new app')) return 'build';
+  if (system.includes('suggest 4 to 6 audiences')) return 'suggest';
+  if (system.includes('Name the app they would build from it')) return 'headline';
+  if (system.includes('Turn it into a real app people would use')) return 'generate';
   if (system.includes('content of the main screen')) return 'kit';
   if (system.includes('one-page business plan')) return 'plan';
   throw new Error('Unknown pass prompt');
@@ -166,7 +202,7 @@ async function fixtureFetch({ options, attempts, calls, aiRequests }: Session, i
     }
     if (url.pathname === '/search') {
       const term = (url.searchParams.get('term') ?? '').toLowerCase();
-      const results = term.includes('dog') || term.includes('pet') ? COMPETITORS : [SOURCE_APP];
+      const results = term.includes('dog') || term.includes('pet') || term.includes('concert') || term.includes('friend') || term.includes('festival') || term.includes('crew') ? COMPETITORS : [SOURCE_APP];
       return reply({ resultCount: results.length, results });
     }
     if (url.pathname.includes('/rss/customerreviews/')) {

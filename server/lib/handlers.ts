@@ -3,10 +3,11 @@
 import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
 import { PassError } from './ai.ts';
 import { AppStoreError, closestCompetitors, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
-import { runBuild, runDissect, runGaps, runKit, runPlan } from './passes.ts';
+import { runAudienceSuggest, runBuild, runDissect, runGaps, runGenerate, runHeadline, runKit, runPlan, type UploadInput } from './passes.ts';
 import { getLowStarReviews, reviewProvider } from './reviews.ts';
-import { ideaSchema } from './schemas.ts';
-import type { AppListing, PassName, Review, ReviewsSummary } from './types.ts';
+import { generateSchema, ideaSchema } from './schemas.ts';
+import type { AppListing, NewPassName, PassName, Review, ReviewsSummary } from './types.ts';
+import { unzipSync } from 'npm:fflate@^0.8.2';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -223,6 +224,171 @@ export function runPass(req: Request, admit: () => string | null = () => null): 
       const limited = pass === 'compete' ? null : admit();
       if (limited) throw new HttpError(429, limited);
       job = startJob(key, `${pass} ${country}/${appId}${typeof body.audience === 'string' ? ` for "${body.audience.slice(0, 40)}"` : ''}`, () => doPass(pass, body, appId, country));
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([job.promise, new Promise((resolve) => { timer = setTimeout(resolve, WAIT_MS); })]);
+    clearTimeout(timer);
+    if (!job.outcome) throw new Pending();
+    if (job.outcome.ok) return job.outcome.value;
+    if (jobs.get(key) === job) jobs.delete(key);
+    throw job.outcome.error;
+  }, (error) => error instanceof Pending ? json({ pending: true }, 202) : null)(req);
+}
+
+// ---- The new front door: ideas from the upload itself -----------------------
+// Uploads are validated here and travel with each request. They are never
+// written to the cache or the database; they live only in the request.
+
+/** Uploads may not exceed this; the bytes travel with every pass request. */
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function dataUrlBytes(dataUrl: string): number {
+  const comma = dataUrl.indexOf(',');
+  const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  return Math.floor(b64.length * 3 / 4);
+}
+
+function dataUrlMime(dataUrl: string): string {
+  return (/^data:([^;,]+)/.exec(dataUrl)?.[1] ?? '').toLowerCase();
+}
+
+/** Pulls readable text out of a .docx (a zip of XML) without extra libraries. */
+function docxText(dataUrl: string): string {
+  const binary = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
+  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+  let xml: Uint8Array | undefined;
+  try {
+    xml = unzipSync(bytes)['word/document.xml'];
+  } catch {
+    throw new HttpError(400, 'We could not open that Word document.');
+  }
+  if (!xml) throw new HttpError(400, 'We could not read that Word document.');
+  const text = new TextDecoder().decode(xml);
+  const lines = text.split('</w:p>').map((paragraph) =>
+    [...paragraph.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((m) => m[1]).join(''),
+  );
+  return lines
+    .map((line) => line.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown };
+
+async function normalizeUpload(raw: unknown): Promise<UploadInput> {
+  const body = (raw ?? {}) as RawUpload;
+  const filename = typeof body.filename === 'string' && body.filename.trim() ? body.filename.trim().slice(0, 120) : 'upload';
+  if (body.kind === 'text') {
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!text) throw new HttpError(400, 'Describe what you want an app about.');
+    return { kind: 'text', text: text.slice(0, 4000), label: 'their words' };
+  }
+  const dataUrl = typeof body.dataUrl === 'string' ? body.dataUrl : '';
+  if (!dataUrl.startsWith('data:')) throw new HttpError(400, 'That upload arrived broken. Try again.');
+  if (dataUrlBytes(dataUrl) > MAX_UPLOAD_BYTES) throw new HttpError(400, 'That file is too big. Try one under 10 MB.');
+  const mime = dataUrlMime(dataUrl);
+  if (body.kind === 'photo') {
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'].includes(mime)) {
+      throw new HttpError(400, 'That photo is in a format we cannot read. Try a JPEG or PNG.');
+    }
+    return { kind: 'photo', dataUrl, label: filename };
+  }
+  if (body.kind === 'document') {
+    if (mime === 'application/pdf') return { kind: 'pdf', dataUrl, label: filename };
+    if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const text = docxText(dataUrl);
+      if (!text.trim()) throw new HttpError(400, 'We could not read any text from that Word document.');
+      return { kind: 'text', text: text.slice(0, 20000), label: `the document "${filename}"` };
+    }
+    throw new HttpError(400, 'That document is in a format we cannot read. Try a PDF or Word document.');
+  }
+  throw new HttpError(400, 'Tell us what you uploaded: a photo, a document, or words.');
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** A job key from the request body, without the megabytes of upload bytes. */
+async function flowKey(pass: string, body: Record<string, unknown>): Promise<string> {
+  const raw = (body.upload ?? {}) as RawUpload;
+  const uploadRef = typeof raw.dataUrl === 'string'
+    ? await sha256Hex(`${raw.kind}:${raw.dataUrl}`)
+    : await sha256Hex(`${raw.kind}:${typeof raw.text === 'string' ? raw.text : ''}`);
+  const ideaRef = body.idea ? await sha256Hex(JSON.stringify(body.idea)) : null;
+  return JSON.stringify([pass, uploadRef, body.audience ?? null, body.headline ?? null, body.templateId ?? null, ideaRef, body.country ?? 'us']);
+}
+
+function headlineOf(value: unknown): { name: string; tagline: string } {
+  const headline = (value ?? {}) as { name?: unknown; tagline?: unknown };
+  const name = typeof headline.name === 'string' ? headline.name.trim().slice(0, 120) : '';
+  const tagline = typeof headline.tagline === 'string' ? headline.tagline.trim().slice(0, 200) : '';
+  if (!name || !tagline) throw new HttpError(400, 'headline needs the name and tagline from the headline step');
+  return { name, tagline };
+}
+
+function generatedIdeaOf(value: unknown) {
+  const parsed = generateSchema.safeParse(value);
+  if (!parsed.success) throw new HttpError(400, 'This step needs the idea from the generate step.');
+  return parsed.data;
+}
+
+/** Maps the new idea onto the fields the kit/plan prompts read. The prompts themselves are untouched. */
+function toKitIdea(idea: ReturnType<typeof generatedIdeaOf>, audience: string) {
+  return {
+    name: idea.name,
+    pitch: idea.tagline,
+    who_its_for: `${audience}: ${idea.job}`,
+    how_it_works: idea.how_it_works,
+    mvp: idea.mvp,
+    monetization: idea.monetization,
+    main_risk: '',
+  };
+}
+
+const FLOW_PASSES: NewPassName[] = ['suggest', 'headline', 'generate', 'compete', 'kit', 'plan'];
+
+async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Promise<unknown> {
+  const country = countryOf(body.country);
+  const audience = pass === 'suggest' ? '' : text(body.audience, 'audience', 80);
+  const templateId = typeof body.templateId === 'string' && body.templateId ? body.templateId.slice(0, 40) : undefined;
+
+  if (pass === 'suggest' || pass === 'headline' || pass === 'generate') {
+    const upload = await normalizeUpload(body.upload);
+    if (pass === 'suggest') return { output: await runAudienceSuggest(upload) };
+    if (pass === 'headline') return { output: await runHeadline(upload, audience) };
+    return { output: await runGenerate(upload, audience, headlineOf(body.headline), templateId) };
+  }
+
+  const idea = generatedIdeaOf(body.idea);
+  const kitIdea = toKitIdea(idea, audience);
+  if (pass === 'kit') return { output: await runKit(kitIdea, audience) };
+  const searched = await searchCompetitors(idea.search_terms, country, '');
+  if (pass === 'plan') return { output: await runPlan(kitIdea, audience, closestCompetitors(searched, 8)) };
+  // compete: App Store search in plain code, no AI.
+  return { competitors: closestCompetitors(searched), searched };
+}
+
+/**
+ * The new front door's passes. Like run-pass, each AI step runs as a server
+ * job: a request waits up to 20 seconds, then answers "pending", and the
+ * browser asks again and joins the same job.
+ */
+export function flowPass(req: Request, admit: () => string | null = () => null): Promise<Response> {
+  return serve(async (body) => {
+    const pass = body.pass as NewPassName;
+    if (!FLOW_PASSES.includes(pass)) throw new HttpError(400, `pass must be one of ${FLOW_PASSES.join(', ')}`);
+    const key = await flowKey(pass, body);
+
+    let job = jobs.get(key);
+    // A failure is told once, then forgotten, so "Try again" starts fresh.
+    if (job?.outcome && !job.outcome.ok && Date.now() - job.endedAt! > 2 * 60 * 1000) job = undefined;
+    if (!job) {
+      // Only AI passes count against the limit.
+      const limited = pass === 'compete' ? null : admit();
+      if (limited) throw new HttpError(429, limited);
+      job = startJob(key, `flow:${pass}${typeof body.audience === 'string' ? ` for "${body.audience.slice(0, 40)}"` : ''}`, () => doFlowPass(pass, body));
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([job.promise, new Promise((resolve) => { timer = setTimeout(resolve, WAIT_MS); })]);
