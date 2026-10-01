@@ -1,30 +1,27 @@
-// The front door: the five kinds of source, as buttons and behind the +.
-// The typing box takes words, and a pasted link still works there too.
+// The front door: type, paste or upload literally anything worth stealing ideas from.
 import { useRef, useState, type ReactNode } from 'react';
 import { FileText, Film, Image as ImageIcon, Link2 } from 'lucide-react';
 import { Composer, HomeBackground, type ComposerOption } from '@/components/shell';
 import { fileToUpload, typedToUpload, UploadError } from '@/lib/upload';
 import type { Upload } from '../../server/lib/types.ts';
 
-/** The five kinds of source. Only what actually works is listed. */
 const ADD_OPTIONS: ComposerOption[] = [
-  { id: 'link', label: 'Link', hint: 'Spotify, Apple Music, YouTube, TikTok, Instagram, GitHub' },
-  { id: 'image', label: 'Image', hint: 'A photo, screenshot, artwork, a product, a map' },
-  { id: 'media', label: 'Video / Audio', hint: 'A video, or a song file' },
-  { id: 'document', label: 'Document / Data', hint: 'PDF or Word' },
-  { id: 'text', label: 'Text / Conversation', hint: 'An idea, notes, a copied conversation: type or paste it' },
+  { id: 'link', label: 'Link', hint: 'App Store, Spotify, Apple Music, YouTube, TikTok, Instagram, GitHub' },
+  { id: 'image', label: 'Image', hint: 'A photo, screenshot, artwork, product, map — whatever' },
+  { id: 'media', label: 'Video / Audio', hint: 'A video, reel, clip or song file' },
+  { id: 'document', label: 'Document / Data', hint: 'PDF, Word or PowerPoint' },
+  { id: 'text', label: 'Text / Conversation', hint: 'An app, idea, scene, notes, conversation — just type it' },
 ];
 
 const PICKERS = [
   { id: 'image', label: 'Image', icon: ImageIcon, accept: 'image/*,.heic,.heif' },
   { id: 'media', label: 'Video / Song', icon: Film, accept: 'video/*,audio/*,.mp4,.mov,.m4v,.mp3,.m4a,.wav,.aac' },
-  { id: 'document', label: 'Document', icon: FileText, accept: 'application/pdf,.pdf,.docx' },
+  { id: 'document', label: 'Document', icon: FileText, accept: 'application/pdf,.pdf,.docx,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation' },
 ] as const;
 
-const TYPE_HINT = 'Describe something or paste text';
-const LINK_HINT = 'Paste a link';
+const TYPE_HINT = 'Type an app, an idea, a scene… literally anything';
+const LINK_HINT = 'Paste the link';
 
-/** Puts the cursor in the typing box. */
 function focusBox() {
   document.querySelector<HTMLInputElement>('[data-testid=input-ask]')?.focus();
 }
@@ -65,20 +62,14 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     {topBar}
     <main className="home home-cinematic">
       <section className="hero hero-cinematic" aria-label="Start">
-        <p className="home-kicker">ANY DNA · APP INVENTION</p>
-        <h1>Find the app<br />inside anything.</h1>
-        <p className="hero-sub">Drop a link, image, video or song, document, or your own words. We extract the useful DNA and turn it into 3 new software app ideas.</p>
-        <div className="home-steps" aria-label="How it works">
-          <span><b>01</b><em>Drop anything</em></span>
-          <i aria-hidden="true">→</i>
-          <span><b>02</b><em>Extract the DNA</em></span>
-          <i aria-hidden="true">→</i>
-          <span><b>03</b><em>Get 3 apps</em></span>
-        </div>
+        <p className="home-kicker">ANY DNA</p>
+        <h1>Drop literally<br />anything in.</h1>
+        <p className="hero-sub">An app. An Instagram reel. A movie scene. A song. A GitHub repo. Even a picture of your dog.</p>
+        <p className="hero-punch">Think none of that has anything to do with a new app? <strong>Think again.</strong></p>
       </section>
 
       <section className="home-start" aria-label="Choose what to drop in">
-        <p className="home-start-label">Start with</p>
+        <p className="home-start-label">Throw something in</p>
         <div className="drop-row drop-row-cinematic">
           <button type="button" className="btn-pill" disabled={active} onClick={() => choose('link')} data-testid="button-link"><Link2 size={17} /><span>Link</span></button>
           {PICKERS.map((picker) => <button key={picker.id} type="button" className="btn-pill" disabled={active} onClick={() => choose(picker.id)}>
@@ -87,7 +78,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
           {PICKERS.map((picker) => <input key={picker.id} ref={(element) => { inputs.current[picker.id] = element; }} type="file" accept={picker.accept} className="vh" aria-hidden="true" tabIndex={-1}
             onChange={(event) => { void takeFile(event.target.files?.[0]); event.target.value = ''; }} />)}
         </div>
-        {uploading && <p className="home-status" role="status">Reading it…</p>}
+        {uploading && <p className="home-status" role="status">Alright, lemme look at it…</p>}
         {error && <p className="home-error" role="alert">{error}</p>}
       </section>
     </main>
@@ -95,7 +86,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     <div className="dock home-dock home-dock-cinematic">
       <div className="dock-stack">
         <Composer placeholder={placeholder} busy={active}
-          options={ADD_OPTIONS} option="" menuTitle="What are you dropping in?"
+          options={ADD_OPTIONS} option="" menuTitle="What are you throwing in?"
           onOption={choose}
           onSubmit={(text) => {
             if (!text.trim()) return false;
@@ -108,7 +99,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
               return false;
             }
           }} />
-        <p className="home-privacy">Uploads aren’t stored.</p>
+        <p className="home-privacy">Hit Go. We’ll take it from there.</p>
       </div>
     </div>
   </div>;
