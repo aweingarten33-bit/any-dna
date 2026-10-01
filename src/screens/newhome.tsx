@@ -21,8 +21,8 @@ const PICKERS = [
   { id: 'document', label: 'Document', icon: FileText, accept: 'application/pdf,.pdf,.docx' },
 ] as const;
 
-const TYPE_HINT = 'Type or paste';
-const LINK_HINT = 'Paste the link here';
+const TYPE_HINT = 'Describe something or paste text';
+const LINK_HINT = 'Paste a link';
 
 /** Puts the cursor in the typing box. */
 function focusBox() {
@@ -63,25 +63,36 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
   return <div className={`app is-home${active ? ' is-busy' : ''}`}>
     <HomeBackground />
     {topBar}
-    <main className="home">
-      <section className="hero" aria-label="Start">
-        <h1><span className="line">Turn anything into</span><br /><span className="line">a new app idea.</span></h1>
-        <p className="hero-sub">Drop in an app, product, photo, video, song, document, link, conversation, or idea. We find the reusable DNA inside it and turn that into new software apps.</p>
-        <p className="home-privacy">Drop something → pick who it’s for → choose a direction → get 3 app ideas.</p>
+    <main className="home home-cinematic">
+      <section className="hero hero-cinematic" aria-label="Start">
+        <p className="home-kicker">ANY DNA · APP INVENTION</p>
+        <h1>Find the app<br />inside anything.</h1>
+        <p className="hero-sub">Drop a link, image, video or song, document, or your own words. We extract the useful DNA and turn it into 3 new software app ideas.</p>
+        <div className="home-steps" aria-label="How it works">
+          <span><b>01</b><em>Drop anything</em></span>
+          <i aria-hidden="true">→</i>
+          <span><b>02</b><em>Extract the DNA</em></span>
+          <i aria-hidden="true">→</i>
+          <span><b>03</b><em>Get 3 apps</em></span>
+        </div>
       </section>
-      <div className="drop-row">
-        <button type="button" className="btn-pill" disabled={active} onClick={() => choose('link')} data-testid="button-link"><Link2 size={18} /><span>Link</span></button>
-        {PICKERS.map((picker) => <button key={picker.id} type="button" className="btn-pill" disabled={active} onClick={() => choose(picker.id)}>
-          <picker.icon size={18} /><span>{picker.label}</span>
-        </button>)}
-        {PICKERS.map((picker) => <input key={picker.id} ref={(element) => { inputs.current[picker.id] = element; }} type="file" accept={picker.accept} className="vh" aria-hidden="true" tabIndex={-1}
-          onChange={(event) => { void takeFile(event.target.files?.[0]); event.target.value = ''; }} />)}
-      </div>
-      {uploading && <p className="home-privacy" role="status">Reading it…</p>}
-      {error && <p className="home-error" role="alert">{error}</p>}
-      <p className="home-privacy">Your upload isn’t stored. It’s read once to invent the idea, then forgotten.</p>
+
+      <section className="home-start" aria-label="Choose what to drop in">
+        <p className="home-start-label">Start with</p>
+        <div className="drop-row drop-row-cinematic">
+          <button type="button" className="btn-pill" disabled={active} onClick={() => choose('link')} data-testid="button-link"><Link2 size={17} /><span>Link</span></button>
+          {PICKERS.map((picker) => <button key={picker.id} type="button" className="btn-pill" disabled={active} onClick={() => choose(picker.id)}>
+            <picker.icon size={17} /><span>{picker.label}</span>
+          </button>)}
+          {PICKERS.map((picker) => <input key={picker.id} ref={(element) => { inputs.current[picker.id] = element; }} type="file" accept={picker.accept} className="vh" aria-hidden="true" tabIndex={-1}
+            onChange={(event) => { void takeFile(event.target.files?.[0]); event.target.value = ''; }} />)}
+        </div>
+        {uploading && <p className="home-status" role="status">Reading it…</p>}
+        {error && <p className="home-error" role="alert">{error}</p>}
+      </section>
     </main>
-    <div className="dock home-dock">
+
+    <div className="dock home-dock home-dock-cinematic">
       <div className="dock-stack">
         <Composer placeholder={placeholder} busy={active}
           options={ADD_OPTIONS} option="" menuTitle="What are you dropping in?"
@@ -97,6 +108,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
               return false;
             }
           }} />
+        <p className="home-privacy">Uploads aren’t stored.</p>
       </div>
     </div>
   </div>;
