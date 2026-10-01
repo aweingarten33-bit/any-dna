@@ -5,7 +5,7 @@
 //   verdict               <- Prompt 4 (Filter): the blunt-stranger checks, run against fetched competitors
 // Prompt 3's "never [source] for [X]" rule is left out on purpose: carrying a
 // proven app to a new audience is what Spinoff does. A reskin is still rejected.
-import { structuredCall } from './claude.ts';
+import { structuredCall } from './ai.ts';
 import { dissectSchema, fitCheckSchema, gapsModelSchema, ideaSchema, verdictModelSchema } from './schemas.ts';
 import type { AppListing, Competitor, CompetitorListing, Dissect, FitCheck, Gaps, Idea, Review, Verdict } from './types.ts';
 

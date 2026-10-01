@@ -1,7 +1,7 @@
 // Runs the pipeline for one app + audience, one checklist step at a time.
 // A failed step can be retried without redoing the steps before it.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AppListing, Blueprint } from '../../supabase/functions/_shared/types.ts';
+import type { AppListing, Blueprint } from '../../server/lib/types.ts';
 import { api } from './api';
 
 export const STEPS = [

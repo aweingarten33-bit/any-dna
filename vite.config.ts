@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss({ optimize: false })],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') }, dedupe: ['react', 'react-dom'] },
   build: { outDir: 'dist', emptyOutDir: true },
-  server: { host: '0.0.0.0' },
+  // In development the API runs separately (npm run api:dev or api:demo).
+  server: { host: '0.0.0.0', proxy: { '/api': `http://localhost:${process.env.API_PORT ?? 8000}` } },
   preview: { host: '0.0.0.0' },
 });

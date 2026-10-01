@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, X } from 'lucide-react';
 import { AppIcon, Rating, Source, price } from '@/components/bits';
-import type { Blueprint, FitComponent } from '../../supabase/functions/_shared/types.ts';
+import type { Blueprint, FitComponent } from '../../server/lib/types.ts';
 
 const CARDS = ['DNA', 'What survives and what breaks', 'The idea', 'Competitors', 'MVP', 'Verdict'] as const;
 const SHORT = ['DNA', 'Fit', 'Idea', 'Rivals', 'MVP', 'Verdict'];

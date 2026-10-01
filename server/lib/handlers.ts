@@ -1,8 +1,8 @@
 // Request handlers for the three edge functions. Each function's index.ts just
 // serves one of these, so the local dev server can route to all of them.
 import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
-import { PassError } from './claude.ts';
-import { lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
+import { PassError } from './ai.ts';
+import { AppStoreError, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
 import { runDissect, runFitCheck, runGaps, runMutate, runVerdict } from './passes.ts';
 import { getLowStarReviews, reviewProvider } from './reviews.ts';
 import { fitCheckSchema, ideaSchema } from './schemas.ts';
@@ -30,9 +30,11 @@ function serve(handle: (body: Record<string, unknown>) => Promise<unknown>) {
       const body = await req.json().catch(() => { throw new HttpError(400, 'Body must be JSON'); });
       return json(await handle(body ?? {}));
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : error instanceof PassError ? 502 : 500;
+      const status = error instanceof HttpError ? error.status : error instanceof PassError || error instanceof AppStoreError ? 502 : 500;
       if (status >= 500) console.error(error);
-      return json({ error: error instanceof Error ? error.message : String(error) }, status);
+      // Unexpected errors can carry internals (SQL, stack details); keep those in the logs.
+      const message = status === 500 ? 'Something went wrong on our side. Please try again.' : error instanceof Error ? error.message : String(error);
+      return json({ error: message }, status);
     }
   };
 }

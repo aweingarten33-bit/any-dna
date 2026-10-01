@@ -1,7 +1,7 @@
 // Saved ideas. v1 keeps them on this device. Records have the same shape as
-// the ideas table, so a Supabase-backed store can replace this one once auth exists.
+// the ideas table, so a server-backed store can replace this one once accounts exist.
 import { useSyncExternalStore } from 'react';
-import type { Blueprint, SavedIdea } from '../../supabase/functions/_shared/types.ts';
+import type { Blueprint, SavedIdea } from '../../server/lib/types.ts';
 
 export type IdeaStore = {
   list(): SavedIdea[];

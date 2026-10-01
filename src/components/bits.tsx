@@ -1,12 +1,12 @@
 import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import { Star } from 'lucide-react';
-import type { AppListing, CompetitorListing } from '../../supabase/functions/_shared/types.ts';
+import type { AppListing, CompetitorListing } from '../../server/lib/types.ts';
 
 /** Where a piece of the blueprint came from. Anything not fetched is labelled unverified. */
 export function Source({ fetched, children }: { fetched?: boolean; children?: ReactNode }) {
   return fetched
     ? <span className="source is-fetched" title="Taken from data Spinoff fetched"><i aria-hidden="true" />{children ?? 'From App Store'}</span>
-    : <span className="source is-unverified" title="Claude’s judgment, not fetched data"><i aria-hidden="true" />Unverified</span>;
+    : <span className="source is-unverified" title="The AI’s judgment, not fetched data"><i aria-hidden="true" />Unverified</span>;
 }
 
 export function AppIcon({ app, size = 64 }: { app: Pick<AppListing, 'icon' | 'name'>; size?: number }) {

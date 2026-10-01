@@ -1,4 +1,4 @@
-// Test double for Apple's API and the Claude API, for local runs and tests.
+// Test double for Apple's API and the AI providers (Muse, Claude), for local runs and tests.
 // installFixtures() swaps globalThis.fetch so the real edge-function code runs
 // end to end without network access or an API key. Everything here is
 // fictional demo data; it never ships with the functions.
@@ -114,7 +114,7 @@ export type FixtureOptions = {
   delayMs?: number;
 };
 
-type Session = { options: FixtureOptions; attempts: Map<string, number>; calls: string[] };
+type Session = { options: FixtureOptions; attempts: Map<string, number>; calls: string[]; aiRequests: Array<{ provider: string; body: Record<string, unknown> }> };
 
 const realFetch = globalThis.fetch;
 let session: Session | null = null;
@@ -123,16 +123,16 @@ let installed = false;
 // The Anthropic client keeps the fetch it was created with, so the stub is
 // installed once and each installFixtures() call swaps in a new session.
 export function installFixtures(options: FixtureOptions = {}) {
-  const current: Session = { options, attempts: new Map(), calls: [] };
+  const current: Session = { options, attempts: new Map(), calls: [], aiRequests: [] };
   session = current;
   if (!installed) {
     installed = true;
     globalThis.fetch = (input: Request | URL | string, init?: RequestInit) => (session ? fixtureFetch(session, input, init) : realFetch(input, init));
   }
-  return { calls: current.calls, attempts: current.attempts, restore: () => { if (session === current) session = null; } };
+  return { calls: current.calls, attempts: current.attempts, aiRequests: current.aiRequests, restore: () => { if (session === current) session = null; } };
 }
 
-async function fixtureFetch({ options, attempts, calls }: Session, input: Request | URL | string, init?: RequestInit): Promise<Response> {
+async function fixtureFetch({ options, attempts, calls, aiRequests }: Session, input: Request | URL | string, init?: RequestInit): Promise<Response> {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   calls.push(`${url.host}${url.pathname}`);
   // Apple serves its JSON as text/javascript; the Claude API uses application/json.
@@ -154,16 +154,20 @@ async function fixtureFetch({ options, attempts, calls }: Session, input: Reques
     }
   }
 
-  // Matched by path: the SDK honours ANTHROPIC_BASE_URL, so the host can vary.
-  if (url.pathname.endsWith('/v1/messages')) {
+  // Muse: Meta Model API (Responses API). Claude: matched by path, since the
+  // Anthropic SDK honours ANTHROPIC_BASE_URL and the host can vary.
+  const isMuse = url.host === 'api.meta.ai' && url.pathname === '/v1/responses';
+  if (isMuse || url.pathname.endsWith('/v1/messages')) {
     const body = JSON.parse(String(init?.body ?? (input instanceof Request ? await input.text() : '{}')));
-    const pass = whichPass(String(body.system));
+    aiRequests.push({ provider: isMuse ? 'muse' : 'claude', body });
+    const pass = whichPass(String(isMuse ? body.instructions : body.system));
     const attempt = (attempts.get(pass) ?? 0) + 1;
     attempts.set(pass, attempt);
     if (options.delayMs) await new Promise((resolve) => setTimeout(resolve, options.delayMs));
     const override = options.reply?.(pass, attempt, body);
     const payload = override ?? PASS_FIXTURES[pass];
     const text = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    if (isMuse) return reply({ id: `resp_fixture_${pass}_${attempt}`, status: 'completed', model: body.model, output_text: text }, 'application/json');
     return reply({
       id: `msg_fixture_${pass}_${attempt}`, type: 'message', role: 'assistant', model: body.model,
       content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null,

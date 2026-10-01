@@ -9,7 +9,7 @@ import { Home } from '@/screens/home';
 import { Audience, Confirm, Divider, Loading } from '@/screens/flow';
 import { Result } from '@/screens/result';
 import { Saved } from '@/screens/saved';
-import type { AppListing, Blueprint, SavedIdea } from '../supabase/functions/_shared/types.ts';
+import type { AppListing, Blueprint, SavedIdea } from '../server/lib/types.ts';
 
 type ScreenState =
   | { name: 'home' }

@@ -1,13 +1,16 @@
 // End-to-end test of the edge-function handlers against the fixture doubles.
 //   deno test -A tests/
 import { assert, assertEquals, assertMatch } from 'jsr:@std/assert@^1';
-import { getReviews, resolveApp, runPass } from '../supabase/functions/_shared/handlers.ts';
-import { parseAppInput } from '../supabase/functions/_shared/itunes.ts';
-import type { FitCheck, Gaps, Idea, Verdict } from '../supabase/functions/_shared/types.ts';
+import { getReviews, resolveApp, runPass } from '../server/lib/handlers.ts';
+import { parseAppInput } from '../server/lib/itunes.ts';
+import type { FitCheck, Gaps, Idea, Verdict } from '../server/lib/types.ts';
 import { installFixtures, PASS_FIXTURES, SOURCE_ID } from '../dev/fixtures.ts';
+import { takeAiCall } from '../server/main.ts';
 
-Deno.env.set('ANTHROPIC_API_KEY', 'fixture-key');
-Deno.env.delete('SUPABASE_URL');
+Deno.env.set('META_MODEL_API_KEY', 'fixture-key');
+Deno.env.delete('ANTHROPIC_API_KEY');
+Deno.env.delete('AI_PROVIDER');
+Deno.env.delete('DATABASE_URL');
 
 async function call(handler: (req: Request) => Promise<Response>, body: unknown) {
   const response = await handler(new Request('http://local/', { method: 'POST', body: JSON.stringify(body) }));
@@ -63,6 +66,15 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
     const again = await call(runPass, { pass: 'dissect', app_id: SOURCE_ID });
     assertEquals(again.body.cached, true);
     assertEquals(fixtures.attempts.get('dissect'), 1);
+
+    // Every AI call went to Muse, standard tier, not stored, with the schema in the instructions.
+    assert(fixtures.aiRequests.length >= 5);
+    for (const { provider, body } of fixtures.aiRequests) {
+      assertEquals(provider, 'muse');
+      assertEquals(body.model, 'muse-spark-1.3');
+      assertEquals(body.store, false);
+      assertMatch(String(body.instructions), /JSON Schema/);
+    }
   } finally {
     fixtures.restore();
   }
@@ -105,4 +117,38 @@ Deno.test('bad requests get a 400 with a reason', async () => {
   assertEquals((await call(runPass, { pass: 'nope', app_id: SOURCE_ID })).status, 400);
   assertEquals((await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID })).body.error, 'audience is required');
   assertEquals((await call(runPass, { pass: 'verdict', app_id: SOURCE_ID, audience: 'x', idea: {} })).status, 400);
+});
+
+Deno.test('AI_PROVIDER=claude routes the same pass to Claude', async () => {
+  Deno.env.set('AI_PROVIDER', 'claude');
+  Deno.env.set('ANTHROPIC_API_KEY', 'fixture-key');
+  const fixtures = installFixtures();
+  try {
+    const result = await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID, audience: 'Travelers' });
+    assertEquals(result.status, 200);
+    assertEquals(fixtures.aiRequests.map((request) => request.provider), ['claude']);
+  } finally {
+    fixtures.restore();
+    Deno.env.delete('AI_PROVIDER');
+    Deno.env.delete('ANTHROPIC_API_KEY');
+  }
+});
+
+Deno.test('a Muse reply wrapped in a code fence still parses', async () => {
+  const fixtures = installFixtures({ reply: (pass) => (pass === 'fit_check' ? '```json\n' + JSON.stringify(PASS_FIXTURES.fit_check) + '\n```' : undefined) });
+  try {
+    const result = await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID, audience: 'Renters' });
+    assertEquals(result.status, 200);
+    assertEquals(fixtures.attempts.get('fit_check'), 1);
+  } finally {
+    fixtures.restore();
+  }
+});
+
+Deno.test('rate limit: a visitor is stopped after the hourly allowance', () => {
+  const now = Date.now();
+  for (let i = 0; i < 30; i += 1) assertEquals(takeAiCall('203.0.113.9', now), null);
+  assertMatch(takeAiCall('203.0.113.9', now) ?? '', /hourly limit/);
+  assertEquals(takeAiCall('203.0.113.10', now), null);
+  assertEquals(takeAiCall('203.0.113.9', now + 3601 * 1000), null);
 });

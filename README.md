@@ -20,9 +20,9 @@ One screen at a time:
 | Shown | Source | Label |
 |---|---|---|
 | App name, rating, category, upfront price | Apple iTunes Lookup/Search API | From App Store |
-| Complaint themes, review counts, quoted reviews | Fetched reviews. Claude groups them and cites review IDs; the code counts the IDs and copies the review text verbatim | From N reviews |
-| Competitor names, prices, ratings | App Store search for the new idea's search terms. Claude can only pick apps from that list by ID; the code drops unknown IDs and fills in names and prices itself | From App Store |
-| DNA, fit check, the idea, MVP, verdict, overlap notes | Claude's judgment | Unverified |
+| Complaint themes, review counts, quoted reviews | Fetched reviews. The AI groups them and cites review IDs; the code counts the IDs and copies the review text verbatim | From N reviews |
+| Competitor names, prices, ratings | App Store search for the new idea's search terms. The AI can only pick apps from that list by ID; the code drops unknown IDs and fills in names and prices itself | From App Store |
+| DNA, fit check, the idea, MVP, verdict, overlap notes | The AI's judgment | Unverified |
 
 The verdict is **go** only if the idea passes all five checks: understandable, desirability of at least 7/10, the core loop does real work, it doesn't already exist, and it has no gimmick. A "go" that fails a check is changed to no-go in code.
 
@@ -32,6 +32,8 @@ The verdict is **go** only if the idea passes all five checks: understandable, d
 
 ## Architecture
 
+One web service: a Deno server that answers the API at `/api/*` and serves the built web app for everything else.
+
 ```
 src/                         React + Vite web app (mobile first)
   screens/home.tsx           the original homepage
@@ -39,18 +41,28 @@ src/                         React + Vite web app (mobile first)
   screens/result.tsx         the six blueprint cards
   screens/saved.tsx          saved ideas
   lib/run.ts                 runs the steps in order; retries from the failed step
-  lib/ideas-store.ts         saved ideas on the device (swap for Supabase when auth lands)
-supabase/
-  migrations/                app_cache and ideas tables
-  functions/resolve-app      step 1: link or name → App Store listing(s)
-  functions/get-reviews      step 2: 1 to 3 star reviews via a swappable provider
-  functions/run-pass         step 3: dissect · gaps · fit_check · mutate · verdict
-  functions/_shared/         Apple client, review providers, cache, prompts, schemas
-dev/                         local server + fictional fixture data for demo mode
+  lib/ideas-store.ts         saved ideas on the device (swap for a server store when accounts land)
+server/
+  main.ts                    the web server: /api routes, rate limits, static files
+  schema.sql                 app_cache and ideas tables (applied on startup)
+  lib/handlers.ts            resolve-app · get-reviews · run-pass
+  lib/passes.ts              the prompts: dissect · gaps · fit_check · mutate · verdict
+  lib/ai.ts                  one structured AI call: validate with Zod, retry once
+  lib/muse.ts, lib/claude.ts the AI providers
+  lib/itunes.ts              Apple's App Store API
+  lib/reviews.ts             swappable review providers
+  lib/cache.ts               Postgres cache (memory without DATABASE_URL)
+dev/                         local API server + fictional fixture data for demo mode
 tests/                       pipeline tests (Deno)
 ```
 
-Each pass is its own request, so no single edge function runs long. Each pass returns JSON constrained by a schema (structured outputs), is validated with Zod, and is retried once if invalid. The `dissect` and `gaps` passes don't depend on the audience, so they're cached in `app_cache` next to the listing and reviews.
+Each pass is its own request, so no single request runs long. Each pass returns JSON matching a schema, is validated with Zod, and is retried once if invalid. The `dissect` and `gaps` passes don't depend on the audience, so they're cached next to the listing and reviews.
+
+### AI provider
+
+**Muse** (Meta Model API, `muse-spark-1.3`) runs every pass. The JSON Schema for each pass goes into Muse's instructions, and the reply is validated in code. Requests are sent with `store: false`, and contributor-tier models (which let Meta train on prompts) are refused at startup.
+
+Claude is available as an alternative: set `AI_PROVIDER=claude` and `ANTHROPIC_API_KEY`. It's also used automatically if only an Anthropic key is set.
 
 ### Prompts
 
@@ -63,50 +75,43 @@ The pass prompts are adapted from the four workbench prompts:
 
 The prompts' mode instructions (Repurpose, ×1000, 2056, Different Angle, Collide) aren't used.
 
-## Setup
+## Deploy on Render
 
-You need a Supabase project, the [Supabase CLI](https://supabase.com/docs/guides/cli), Node 20+ and an Anthropic API key.
+One **web service** (Node runtime) from this repo:
 
-```bash
-npm install
+| Setting | Value |
+|---|---|
+| Build command | `npm run render-build` |
+| Start command | `npm start` |
+| Health check path | `/api/health` |
 
-# Backend
-supabase link --project-ref YOUR-PROJECT-REF
-supabase db push                                    # creates app_cache and ideas
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-supabase functions deploy resolve-app get-reviews run-pass
+Environment variables:
 
-# Frontend
-cp .env.example .env.local    # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
-npm run dev
-```
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `META_MODEL_API_KEY` | **yes** | | Muse key from the Meta Model API |
+| `META_MODEL` | no | `muse-spark-1.3` | Muse model (standard tier only) |
+| `DATABASE_URL` | no | memory | Postgres for the App Store cache. Without it the cache resets on every deploy, which only costs speed. |
+| `AI_CALLS_PER_HOUR` | no | `30` | Per visitor (one full run is 5 calls) |
+| `AI_CALLS_PER_DAY` | no | `300` | Across all visitors; caps what strangers can spend |
+| `REVIEW_PROVIDER` | no | `apple-rss` | `apple-rss`, `scraper` (fill in `scraperProvider` in `server/lib/reviews.ts`), or `none` |
 
-Optional secrets:
-
-| Secret | Default | Purpose |
-|---|---|---|
-| `CLAUDE_MODEL` | `claude-opus-5-5` | Model for every pass. `claude-sonnet-5-5` is cheaper. |
-| `REVIEW_PROVIDER` | `apple-rss` | `apple-rss`, `scraper` (fill in `scraperProvider` in `_shared/reviews.ts`), or `none` |
-
-Claude requests use server-side fallbacks (`fallbacks: "default"`). If a request is declined by a safety classifier, it re-runs on Anthropic's recommended fallback model instead of failing.
-
-**Cost:** one full run makes five Claude calls (three when you try a different audience). On Opus 5.5 I estimate it costs well under a dollar per run, but I haven't measured it.
+Deno comes from npm (the `deno` package), so Render's Node runtime is all that's needed. The build caches the server's dependencies in `.deno/`, which the start command reuses.
 
 ## Local development
 
-Local development needs [Deno](https://deno.com) 2.
-
 ```bash
-npm run functions:demo   # all three functions on :54321 with fictional demo data, no key or network
-npm run functions:dev    # same, but real Apple + Claude (export ANTHROPIC_API_KEY first)
-VITE_SUPABASE_URL=http://localhost:54321 npm run dev
+npm install
+npm run api:demo     # API on :8000 with fictional demo data: no key or network needed
+npm run dev          # web app on :5173; /api is forwarded to :8000
 
-npm run functions:test   # pipeline tests
+npm run api:dev      # real Apple + Muse instead of demo data (export META_MODEL_API_KEY first)
+npm test             # pipeline tests
 npm run typecheck
 ```
 
-Without `SUPABASE_URL`, the functions cache in memory.
+`TEST_DATABASE_URL=postgres://… npm test` also runs the pipeline against a real Postgres.
 
-## Adding auth later
+## Adding accounts later
 
-The `ideas` table already has `device_id` and `user_id` columns and an owner-only RLS policy. To add accounts, implement the `IdeaStore` interface in `src/lib/ideas-store.ts` against that table and swap it in. Nothing else changes.
+The `ideas` table already has `device_id` and `user_id` columns. To add accounts, implement the `IdeaStore` interface in `src/lib/ideas-store.ts` against that table and swap it in.

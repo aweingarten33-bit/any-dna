@@ -4,6 +4,9 @@ import type { AppListing, CompetitorListing } from './types.ts';
 
 const BASE = 'https://itunes.apple.com';
 
+/** The App Store was unreachable or errored: shown to the user as-is. */
+export class AppStoreError extends Error {}
+
 export type AppInput = { appId: string | null; term: string | null; country: string };
 
 /** Accepts an App Store link, a bare numeric ID, or an app name. */
@@ -36,8 +39,13 @@ type ItunesResult = {
 };
 
 async function getJson(url: string): Promise<{ resultCount: number; results: ItunesResult[] }> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(`App Store returned ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { accept: 'application/json' } });
+  } catch {
+    throw new AppStoreError('Couldn’t reach the App Store. Please try again.');
+  }
+  if (!response.ok) throw new AppStoreError(`The App Store returned an error (${response.status}). Please try again.`);
   // Apple sometimes serves this JSON as text/javascript, so parse the text ourselves.
   return JSON.parse(await response.text());
 }
@@ -98,6 +106,6 @@ export async function searchCompetitors(terms: string[], country: string, exclud
       });
     }
   }
-  if (!lists.length && unique.length) throw new Error('App Store search failed for every term');
+  if (!lists.length && unique.length) throw new AppStoreError('Couldn’t search the App Store for competitors. Please try again.');
   return found.slice(0, max);
 }

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { ArrowRight, Trash2 } from 'lucide-react';
 import { AppIcon, Screen } from '@/components/bits';
-import type { SavedIdea } from '../../supabase/functions/_shared/types.ts';
+import type { SavedIdea } from '../../server/lib/types.ts';
 
 export function Saved({ ideas, onOpen, onDifferentAudience, onDelete, onNew }: {
   ideas: SavedIdea[];

@@ -1,19 +1,18 @@
-// Calls to the Supabase edge functions.
-import type { AppListing, CompetitorListing, Dissect, FitCheck, Gaps, Idea, ReviewsSummary, Verdict } from '../../supabase/functions/_shared/types.ts';
+// Calls to Spinoff's API. Same origin in production; in development Vite
+// forwards /api to the local server (see vite.config.ts).
+import type { AppListing, CompetitorListing, Dissect, FitCheck, Gaps, Idea, ReviewsSummary, Verdict } from '../../server/lib/types.ts';
 
-const BASE = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
-const KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
+const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
 
 export class ApiError extends Error {}
 
 async function post<T>(name: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  if (!BASE) throw new ApiError('Spinoff isn’t connected to its backend yet. Set VITE_SUPABASE_URL (see README).');
   let response: Response;
   try {
-    response = await fetch(`${BASE}/functions/v1/${name}`, {
+    response = await fetch(`${BASE}/api/${name}`, {
       method: 'POST',
       signal,
-      headers: { 'Content-Type': 'application/json', ...(KEY ? { apikey: KEY, Authorization: `Bearer ${KEY}` } : {}) },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   } catch (error) {

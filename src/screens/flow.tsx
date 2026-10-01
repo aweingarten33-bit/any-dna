@@ -3,7 +3,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { ArrowRight, ArrowUpRight, Check, RefreshCw, X } from 'lucide-react';
 import { AppIcon, Fade, Marquee, Screen, Source, Split, compact, price } from '@/components/bits';
 import { STEPS, useRun, type StepState } from '@/lib/run';
-import type { AppListing, Blueprint } from '../../supabase/functions/_shared/types.ts';
+import type { AppListing, Blueprint } from '../../server/lib/types.ts';
 
 export function Confirm({ candidates, index, onYes, onNext, onSearchAgain }: {
   candidates: AppListing[];
