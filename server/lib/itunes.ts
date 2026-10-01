@@ -7,18 +7,6 @@ const BASE = 'https://itunes.apple.com';
 /** The App Store was unreachable or errored: shown to the user as-is. */
 export class AppStoreError extends Error {}
 
-export type AppInput = { appId: string | null; term: string | null; country: string };
-
-/** Accepts an App Store link, a bare numeric ID, or an app name. */
-export function parseAppInput(raw: string, fallbackCountry = 'us'): AppInput {
-  const text = raw.trim();
-  const country = text.match(/apple\.com\/([a-z]{2})\//i)?.[1]?.toLowerCase() ?? fallbackCountry;
-  const fromLink = text.match(/\/id(\d{5,})/i)?.[1] ?? text.match(/[?&]id=(\d{5,})/i)?.[1];
-  if (fromLink) return { appId: fromLink, term: null, country };
-  if (/^(id)?\d{5,}$/i.test(text)) return { appId: text.replace(/^id/i, ''), term: null, country };
-  return { appId: null, term: text, country };
-}
-
 type ItunesResult = {
   trackId: number;
   trackName: string;
@@ -71,12 +59,6 @@ export function toListing(result: ItunesResult, country: string): AppListing {
     description: (result.description ?? '').slice(0, 4000),
     url: result.trackViewUrl ?? '',
   };
-}
-
-export async function lookupApp(appId: string, country: string): Promise<AppListing | null> {
-  const data = await getJson(`${BASE}/lookup?id=${encodeURIComponent(appId)}&country=${country}&entity=software`);
-  const hit = data.results.find(isApp);
-  return hit ? toListing(hit, country) : null;
 }
 
 export async function searchApps(term: string, country: string, limit = 5): Promise<AppListing[]> {

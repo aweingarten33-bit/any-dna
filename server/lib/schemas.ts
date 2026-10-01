@@ -2,40 +2,6 @@
 // into JSON Schema, constrains the model's output.
 import { z } from 'npm:zod@^4.1.0';
 
-export const dissectSchema = z.object({
-  what_it_is: z.string(),
-  what_people_do: z.string(),
-  why_it_works: z.string(),
-  how_it_makes_money: z.string(),
-  tricks: z.array(z.object({ name: z.string(), how_it_works: z.string(), needs: z.string() })),
-  unknowns: z.array(z.string()),
-});
-
-/** The model cites review IDs; code turns them into counts and verbatim examples. */
-export const gapsModelSchema = z.object({
-  themes: z.array(z.object({
-    theme: z.string(),
-    review_ids: z.array(z.string()),
-    about: z.enum(['mechanic', 'subject']),
-  })),
-});
-
-export const ideaSchema = z.object({
-  name: z.string(),
-  pitch: z.string(),
-  who_its_for: z.string(),
-  how_it_works: z.array(z.string()),
-  borrowed_trick: z.string(),
-  whats_different: z.string(),
-  fixes_complaint: z.string(),
-  mvp: z.array(z.string()),
-  monetization: z.string(),
-  main_risk: z.string(),
-  search_terms: z.array(z.string()),
-});
-
-export const buildSchema = z.object({ idea: ideaSchema });
-
 // ---- The new front door: ideas from the upload itself ----------------------
 // The user drops anything (photo, document, typed words) and names an
 // audience. No source app, no DNA extraction.
@@ -61,7 +27,6 @@ export const generateSchema = z.object({
   search_terms: z.array(z.string()),
 });
 
-export const generateOutputSchema = z.object({ output: generateSchema });
 
 /** Stages 1 and 2: research the upload and extract its DNA. */
 export const readSchema = z.object({

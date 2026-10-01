@@ -74,8 +74,8 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
   const latest = useRef(blueprint);
   latest.current = blueprint;
 
-  const kitRun = useExtra(kit, (signal) => api.flowKit(audience, idea, blueprint.templateId, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, kit: value }), true);
-  const planRun = useExtra(plan, (signal) => api.flowPlan(audience, idea, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, plan: value }), false);
+  const kitRun = useExtra(kit, (signal) => api.kit(audience, idea, blueprint.templateId, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, kit: value }), true);
+  const planRun = useExtra(plan, (signal) => api.plan(audience, idea, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, plan: value }), false);
 
   useEffect(() => {
     const element = track.current;

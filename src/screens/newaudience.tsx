@@ -18,7 +18,7 @@ export function NewAudience({ upload, initial, initialDirection, onPick }: { upl
     const abort = new AbortController();
     setAudiences(null);
     setError(null);
-    api.flowSuggest(upload, abort.signal).then(
+    api.suggest(upload, abort.signal).then(
       ({ output }) => { if (!abort.signal.aborted) setAudiences(output.audiences); },
       (caught) => { if (!abort.signal.aborted) setError(caught instanceof Error ? caught.message : String(caught)); },
     );
@@ -28,7 +28,7 @@ export function NewAudience({ upload, initial, initialDirection, onPick }: { upl
   function retry() {
     const abort = new AbortController();
     setError(null);
-    api.flowSuggest(upload, abort.signal).then(
+    api.suggest(upload, abort.signal).then(
       ({ output }) => { if (!abort.signal.aborted) setAudiences(output.audiences); },
       (caught) => { if (!abort.signal.aborted) setError(caught instanceof Error ? caught.message : String(caught)); },
     );

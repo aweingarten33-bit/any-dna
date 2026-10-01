@@ -1,43 +1,6 @@
 // The prompt a person pastes into an AI app builder, and where to paste it.
 // Written in code from the idea and the mockup content, so it costs no AI time.
-import type { GeneratedIdea, Idea, Kit } from '../../server/lib/types.ts';
-
-export function buildPrompt(idea: Idea, kit?: Kit): string {
-  const lines = [
-    `Build a mobile-first web app called ${idea.name}.`,
-    '',
-    `What it is: ${idea.pitch}`,
-    `Who it's for: ${idea.who_its_for}`,
-    '',
-    'How it works:',
-    ...idea.how_it_works.map((step, i) => `${i + 1}. ${step}`),
-    '',
-    'Build only these features for the first version:',
-    ...idea.mvp.map((item) => `- ${item}`),
-  ];
-  if (kit) {
-    const { screen } = kit;
-    lines.push(
-      '',
-      'Main screen:',
-      `- A header with "${screen.greeting}" above the title "${screen.title}".`,
-      `- A highlighted card showing "${screen.hero_label}: ${screen.hero_value}".`,
-      `- A main button: "${screen.primary_action}".`,
-      '- A list of items like:',
-      ...screen.cards.map((card) => `  - ${card.title}: ${card.detail} (${card.tag})`),
-      `- A bottom tab bar: ${screen.tabs.join(', ')}.`,
-    );
-  }
-  lines.push(
-    '',
-    `Later, not in this version: ${idea.monetization}`,
-    '',
-    'Design: clean and modern. Lots of white space, one accent color, rounded cards, big tap targets. It must feel great on a phone.',
-    'Keep it simple: no admin dashboard and no settings beyond the basics. Add sign-in only where people need to share data.',
-    'Use realistic sample data so the app looks alive the first time it opens.',
-  );
-  return lines.join('\n');
-}
+import type { GeneratedIdea, Kit } from '../../server/lib/types.ts';
 
 export type BuildTool = {
   name: string;

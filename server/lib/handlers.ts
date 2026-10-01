@@ -1,12 +1,12 @@
-// Request handlers for the three edge functions. Each function's index.ts just
-// serves one of these, so the local dev server can route to all of them.
-import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
+// The API: one route, flow-pass, runs each step of the app. Uploads travel
+// with the request that reads them and are never stored. Each AI step runs as
+// a server job: a request waits up to 20 seconds, then answers "pending", and
+// the browser asks again and joins the same job.
 import { PassError } from './ai.ts';
-import { AppStoreError, closestCompetitors, findSong, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
-import { runAudienceSuggest, runBuild, runDissect, runFilter, runGaps, runInvent, runKit, runPlan, runRead, type UploadInput } from './passes.ts';
-import { getLowStarReviews, reviewProvider } from './reviews.ts';
-import { generateSchema, ideaSchema, readSchema } from './schemas.ts';
-import type { AppListing, NewPassName, PassName, Review, ReviewsSummary } from './types.ts';
+import { AppStoreError, closestCompetitors, findSong, searchCompetitors } from './itunes.ts';
+import { runAudienceSuggest, runFilter, runInvent, runKit, runPlan, runRead, type UploadInput } from './passes.ts';
+import { generateSchema, readSchema } from './schemas.ts';
+import type { NewPassName } from './types.ts';
 import { unzipSync } from 'npm:fflate@^0.8.2';
 import { templateById } from './templates.ts';
 
@@ -52,132 +52,6 @@ function countryOf(value: unknown) {
   return typeof value === 'string' && /^[a-z]{2}$/i.test(value) ? value.toLowerCase() : 'us';
 }
 
-// ---- Step 1: resolve_app ------------------------------------------------
-
-export const resolveApp = serve(async (body) => {
-  const input = parseAppInput(text(body.query, 'query'), countryOf(body.country));
-  const candidates = input.appId
-    ? [await lookupApp(input.appId, input.country)].filter((app): app is AppListing => !!app)
-    : await searchApps(input.term!, input.country, 5);
-  if (!candidates.length) throw new HttpError(404, input.appId ? 'No App Store app has that ID.' : `No App Store apps matched “${input.term}”.`);
-  await Promise.all(candidates.map(saveListing));
-  return { candidates };
-});
-
-// ---- Step 2: get_reviews -------------------------------------------------
-
-// Steps now run in parallel (dissect and gaps, or two visitors on the same
-// app), so the same fetch or AI call can be asked for twice at once. Share one
-// in-flight job per key instead of doing the work twice.
-const inflight = new Map<string, Promise<unknown>>();
-function once<T>(key: string, work: () => Promise<T>): Promise<T> {
-  const running = inflight.get(key) as Promise<T> | undefined;
-  if (running) return running;
-  const job = work().finally(() => inflight.delete(key));
-  inflight.set(key, job);
-  return job;
-}
-
-function ensureListing(appId: string, country: string): Promise<AppListing> {
-  return once(`listing:${country}:${appId}`, () => loadListing(appId, country));
-}
-
-function ensureReviews(appId: string, country: string, refresh = false): Promise<{ summary: ReviewsSummary; reviews: Review[] }> {
-  return once(`reviews:${country}:${appId}:${refresh}`, () => loadReviews(appId, country, refresh));
-}
-
-async function loadListing(appId: string, country: string): Promise<AppListing> {
-  const row = await getRow(appId, country);
-  if (row?.listing_json && isFresh(row.fetched_at, LISTING_TTL_MS)) return row.listing_json;
-  const listing = await lookupApp(appId, country);
-  if (!listing) throw new HttpError(404, 'That app is no longer on the App Store.');
-  await saveListing(listing);
-  return listing;
-}
-
-async function loadReviews(appId: string, country: string, refresh: boolean): Promise<{ summary: ReviewsSummary; reviews: Review[] }> {
-  const row = await getRow(appId, country);
-  if (!refresh && row?.reviews_json && isFresh(row.reviews_fetched_at, REVIEWS_TTL_MS)) return row.reviews_json;
-  const provider = reviewProvider();
-  const { scanned, lowStar } = await getLowStarReviews(provider, appId, country);
-  const summary: ReviewsSummary = { app_id: appId, provider: provider.name, low_star_count: lowStar.length, scanned_count: scanned, fetched_at: new Date().toISOString() };
-  await saveReviews(appId, country, summary, lowStar);
-  return { summary, reviews: lowStar };
-}
-
-export const getReviews = serve(async (body) => {
-  const appId = text(body.app_id, 'app_id', 20);
-  const country = countryOf(body.country);
-  await ensureListing(appId, country);
-  const { summary } = await ensureReviews(appId, country, body.refresh === true);
-  return { summary };
-});
-
-// ---- Step 3: the passes --------------------------------------------------
-
-async function context(appId: string, country: string) {
-  const listing = await ensureListing(appId, country);
-  const { reviews } = await ensureReviews(appId, country);
-  const row = await getRow(appId, country);
-  return { listing, reviews, analysis: row?.analysis_json ?? {} };
-}
-
-function ensureDissect(appId: string, country: string) {
-  return once(`dissect:${country}:${appId}`, () => loadDissect(appId, country));
-}
-
-function ensureGaps(appId: string, country: string) {
-  return once(`gaps:${country}:${appId}`, () => loadGaps(appId, country));
-}
-
-async function loadDissect(appId: string, country: string) {
-  const { listing, reviews, analysis } = await context(appId, country);
-  if (analysis.dissect) return { listing, output: analysis.dissect, cached: true };
-  const output = await runDissect(listing, reviews);
-  await saveAnalysis(appId, country, { dissect: output });
-  return { listing, output, cached: false };
-}
-
-async function loadGaps(appId: string, country: string) {
-  const { listing, reviews, analysis } = await context(appId, country);
-  if (analysis.gaps) return { output: analysis.gaps, cached: true };
-  const output = await runGaps(listing, reviews);
-  await saveAnalysis(appId, country, { gaps: output });
-  return { output, cached: false };
-}
-
-const PASSES: PassName[] = ['dissect', 'gaps', 'build', 'compete', 'kit', 'plan'];
-
-async function doPass(pass: PassName, body: Record<string, unknown>, appId: string, country: string): Promise<unknown> {
-  if (pass === 'dissect') { const { output, cached } = await ensureDissect(appId, country); return { output, cached }; }
-  if (pass === 'gaps') return ensureGaps(appId, country);
-
-  const audience = text(body.audience, 'audience', 80);
-  if (pass === 'build') {
-    const [{ listing, output: dissect }, { output: gaps }] = await Promise.all([ensureDissect(appId, country), ensureGaps(appId, country)]);
-    return { output: await runBuild(listing, dissect, gaps, audience) };
-  }
-  if (pass === 'kit' || pass === 'plan') {
-    const idea = ideaSchema.safeParse(body.idea);
-    if (!idea.success) throw new HttpError(400, `${pass} needs the idea from the build step`);
-    if (pass === 'kit') return { output: await runKit(idea.data, audience) };
-    // Competitor prices are searched again here rather than taken from the request, so they stay fetched data.
-    const searched = await searchCompetitors(idea.data.search_terms, country, appId);
-    return { output: await runPlan(idea.data, audience, closestCompetitors(searched, 8)) };
-  }
-  // compete: search the store the way someone in this audience would, and keep the closest matches. No AI.
-  const idea = ideaSchema.pick({ search_terms: true }).safeParse(body.idea);
-  if (!idea.success) throw new HttpError(400, 'compete needs the idea from the build step');
-  const searched = await searchCompetitors(idea.data.search_terms, country, appId);
-  return { competitors: closestCompetitors(searched), searched };
-}
-
-// An AI pass can take a minute or more. Holding one HTTP request open that long
-// breaks on phones (a locked screen or a switched app drops it) and on proxies.
-// So a pass runs as a job on the server: a request waits up to WAIT_MS, and if
-// the job isn't done it answers "pending"; the browser asks again with the same
-// body and joins the same job. Finished results are kept for a while, so a
-// dropped request never restarts the work.
 const WAIT_MS = Number(Deno.env.get('PASS_WAIT_MS') ?? 20_000);
 const KEEP_MS = 15 * 60 * 1000;
 type Job = { promise: Promise<unknown>; endedAt?: number; outcome?: { ok: true; value: unknown } | { ok: false; error: unknown } };
@@ -206,39 +80,7 @@ function startJob(key: string, label: string, work: () => Promise<unknown>): Job
 
 class Pending {}
 
-/** Runs a pass. `admit` is asked before a new job starts (the rate limit); joining a running job is free. */
-export function runPass(req: Request, admit: () => string | null = () => null): Promise<Response> {
-  return serve(async (body) => {
-    const pass = body.pass as PassName;
-    if (!PASSES.includes(pass)) throw new HttpError(400, `pass must be one of ${PASSES.join(', ')}`);
-    const appId = text(body.app_id, 'app_id', 20);
-    const country = countryOf(body.country);
-    const audienceKey = pass === 'dissect' || pass === 'gaps' ? null : body.audience;
-    const ideaKey = pass === 'compete' ? (body.idea as { search_terms?: unknown })?.search_terms : pass === 'kit' || pass === 'plan' ? body.idea : null;
-    const key = JSON.stringify([pass, appId, country, audienceKey, ideaKey]);
-
-    let job = jobs.get(key);
-    // A failure is told once, then forgotten, so "Try again" starts fresh.
-    if (job?.outcome && !job.outcome.ok && Date.now() - job.endedAt! > 2 * 60 * 1000) job = undefined;
-    if (!job) {
-      // Only AI passes count against the limit.
-      const limited = pass === 'compete' ? null : admit();
-      if (limited) throw new HttpError(429, limited);
-      job = startJob(key, `${pass} ${country}/${appId}${typeof body.audience === 'string' ? ` for "${body.audience.slice(0, 40)}"` : ''}`, () => doPass(pass, body, appId, country));
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([job.promise, new Promise((resolve) => { timer = setTimeout(resolve, WAIT_MS); })]);
-    clearTimeout(timer);
-    if (!job.outcome) throw new Pending();
-    if (job.outcome.ok) return job.outcome.value;
-    if (jobs.get(key) === job) jobs.delete(key);
-    throw job.outcome.error;
-  }, (error) => error instanceof Pending ? json({ pending: true }, 202) : null)(req);
-}
-
-// ---- The new front door: ideas from the upload itself -----------------------
-// Uploads are validated here and travel with each request. They are never
-// written to the cache or the database; they live only in the request.
+// ---- Uploads -------------------------------------------------------------------
 
 /** Uploads may not exceed this; the bytes travel with every pass request. */
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -274,7 +116,7 @@ function docxText(dataUrl: string): string {
     .join('\n');
 }
 
-type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown; frames?: unknown };
+export type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown; frames?: unknown };
 
 async function normalizeUpload(raw: unknown): Promise<UploadInput> {
   const body = (raw ?? {}) as RawUpload;
@@ -317,14 +159,35 @@ async function sha256Hex(input: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** The upload's fingerprint. The browser computes the same one, so a check-in can name the upload without resending it. */
+export function uploadFingerprintSource(raw: RawUpload): string {
+  const payload = typeof raw.dataUrl === 'string' ? raw.dataUrl
+    : Array.isArray(raw.frames) ? raw.frames.join('|')
+    : typeof raw.text === 'string' ? raw.text : '';
+  return `${String(raw.kind)}:${payload}`;
+}
+
+/** Asked to check on a step that needs the upload, but the server doesn't have that step (it restarted): resend it. */
+class NeedUpload extends Error {}
+
 /** A job key from the request body, without the megabytes of upload bytes. Only suggest and read read the upload. */
 async function flowKey(pass: string, body: Record<string, unknown>): Promise<string> {
-  const raw = (body.upload ?? {}) as RawUpload;
-  const uploadRef = pass === 'suggest' || pass === 'read'
-    ? await sha256Hex(`${raw.kind}:${typeof raw.dataUrl === 'string' ? raw.dataUrl : Array.isArray(raw.frames) ? raw.frames.join('|') : typeof raw.text === 'string' ? raw.text : ''}`)
-    : null;
-  return sha256Hex(JSON.stringify([pass, uploadRef, { ...body, upload: undefined }]));
+  let uploadRef: string | null = null;
+  if (pass === 'suggest' || pass === 'read') {
+    const claimed = typeof body.uploadRef === 'string' && /^[0-9a-f]{64}$/.test(body.uploadRef) ? body.uploadRef : null;
+    if (body.upload) {
+      uploadRef = await sha256Hex(uploadFingerprintSource(body.upload as RawUpload));
+      if (claimed && claimed !== uploadRef) throw new HttpError(400, 'That upload arrived changed. Try again.');
+    } else if (claimed) {
+      uploadRef = claimed;
+    } else {
+      throw new HttpError(400, 'Drop something in first.');
+    }
+  }
+  return sha256Hex(JSON.stringify([pass, uploadRef, { ...body, upload: undefined, uploadRef: undefined }]));
 }
+
+// ---- The steps ------------------------------------------------------------------
 
 function readOf(value: unknown) {
   const parsed = readSchema.safeParse(value);
@@ -343,7 +206,7 @@ function generatedIdeaOf(value: unknown) {
   return parsed.data;
 }
 
-/** Maps the new idea onto the fields the kit/plan prompts read. The prompts themselves are untouched. */
+/** The fields the screen-writing and business-plan prompts read. */
 function toKitIdea(idea: ReturnType<typeof generatedIdeaOf>, audience: string) {
   return {
     name: idea.name,
@@ -358,9 +221,14 @@ function toKitIdea(idea: ReturnType<typeof generatedIdeaOf>, audience: string) {
 
 const FLOW_PASSES: NewPassName[] = ['suggest', 'read', 'invent', 'filter', 'compete', 'kit', 'plan'];
 
+/** An audience the user typed goes inside prompts: plain words only. */
+function audienceOf(value: unknown) {
+  return text(value, 'audience', 80).replace(/[<>{}\n\r]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Promise<unknown> {
   const country = countryOf(body.country);
-  const audience = pass === 'suggest' || pass === 'filter' ? '' : text(body.audience, 'audience', 80);
+  const audience = pass === 'suggest' || pass === 'filter' ? '' : audienceOf(body.audience);
   const templateId = typeof body.templateId === 'string' && body.templateId ? body.templateId.slice(0, 40) : undefined;
   const direction = typeof body.direction === 'string' && body.direction.trim() ? body.direction.trim().slice(0, 600) : undefined;
 
@@ -372,7 +240,12 @@ async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Pro
     return { output: await runRead(upload, audience, direction, song) };
   }
   if (pass === 'invent') return { output: await runInvent(readOf(body.read), audience, direction, templateId) };
-  if (pass === 'filter') return { output: await runFilter(ideasOf(body.ideas), readOf(body.read)) };
+  if (pass === 'filter') {
+    // The stranger's "already exists" check gets real App Store results for each idea, not memory.
+    const ideas = ideasOf(body.ideas);
+    const found = await Promise.all(ideas.map((idea) => searchCompetitors(idea.search_terms, country, '').catch(() => [])));
+    return { output: await runFilter(ideas, readOf(body.read), found) };
+  }
 
   const idea = generatedIdeaOf(body.idea);
   const kitIdea = toKitIdea(idea, audience);
@@ -383,11 +256,7 @@ async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Pro
   return { competitors: closestCompetitors(searched), searched };
 }
 
-/**
- * The new front door's passes. Like run-pass, each AI step runs as a server
- * job: a request waits up to 20 seconds, then answers "pending", and the
- * browser asks again and joins the same job.
- */
+/** Runs one step. `admit` is asked before a new job starts (the rate limit); checking on a running job is free. */
 export function flowPass(req: Request, admit: () => string | null = () => null): Promise<Response> {
   return serve(async (body) => {
     const pass = body.pass as NewPassName;
@@ -398,10 +267,11 @@ export function flowPass(req: Request, admit: () => string | null = () => null):
     // A failure is told once, then forgotten, so "Try again" starts fresh.
     if (job?.outcome && !job.outcome.ok && Date.now() - job.endedAt! > 2 * 60 * 1000) job = undefined;
     if (!job) {
-      // Only AI passes count against the limit.
+      if ((pass === 'suggest' || pass === 'read') && !body.upload) throw new NeedUpload();
+      // Only AI steps count against the limit.
       const limited = pass === 'compete' ? null : admit();
       if (limited) throw new HttpError(429, limited);
-      job = startJob(key, `flow:${pass}${typeof body.audience === 'string' ? ` for "${body.audience.slice(0, 40)}"` : ''}`, () => doFlowPass(pass, body));
+      job = startJob(key, `${pass}${audienceLabel(body.audience)}`, () => doFlowPass(pass, body));
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([job.promise, new Promise((resolve) => { timer = setTimeout(resolve, WAIT_MS); })]);
@@ -410,5 +280,9 @@ export function flowPass(req: Request, admit: () => string | null = () => null):
     if (job.outcome.ok) return job.outcome.value;
     if (jobs.get(key) === job) jobs.delete(key);
     throw job.outcome.error;
-  }, (error) => error instanceof Pending ? json({ pending: true }, 202) : null)(req);
+  }, (error) => error instanceof Pending ? json({ pending: true }, 202) : error instanceof NeedUpload ? json({ needUpload: true }, 409) : null)(req);
+}
+
+function audienceLabel(value: unknown) {
+  return typeof value === 'string' && value ? ` for "${value.slice(0, 40)}"` : '';
 }

@@ -19,7 +19,7 @@ export function NewPick({ ideas, audience, onChoose }: {
     setBusy(idea.name);
     setError(null);
     try {
-      onChoose(idea, await api.flowCompete(audience, idea));
+      onChoose(idea, await api.compete(audience, idea));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
       setBusy(null);

@@ -42,9 +42,9 @@ export function useNewRun(upload: Upload, audience: string, direction: string, t
     setAsking(false);
 
     const steps: Record<NewStepId, () => Promise<void>> = {
-      read: async () => { out.read ??= (await api.flowRead(upload, audience, said, signal)).output; },
-      invent: async () => { out.ideas ??= (await api.flowInvent(out.read!, audience, said, templateId, signal)).output; },
-      filter: async () => { out.kept ??= (await api.flowFilter(out.ideas!, out.read!, signal)).output; },
+      read: async () => { out.read ??= (await api.read(upload, audience, said, signal)).output; },
+      invent: async () => { out.ideas ??= (await api.invent(out.read!, audience, said, templateId, signal)).output; },
+      filter: async () => { out.kept ??= (await api.filter(out.ideas!, out.read!, signal)).output; },
     };
 
     for (const step of NEW_STEPS) {

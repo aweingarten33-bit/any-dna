@@ -6,23 +6,16 @@
 // Environment:
 //   PORT                  port to listen on (Render sets this; default 8000)
 //   META_MODEL_API_KEY    Muse key (the AI provider). See server/lib/ai.ts
-//   DATABASE_URL          optional Postgres for the app_cache; memory otherwise
-//   AI_CALLS_PER_HOUR     per-visitor limit on AI calls (default 30, about 7 runs)
-//   AI_CALLS_PER_DAY      limit across all visitors (default 300)
+//   AI_CALLS_PER_HOUR     per-visitor limit on AI calls (default 60; a run uses about 5)
+//   AI_CALLS_PER_DAY      limit across all visitors (default 1000)
 //   PASS_WAIT_MS          how long one request waits on a pass before answering "pending" (default 20000)
 import { serveDir, serveFile } from 'jsr:@std/http@^1/file-server';
-import { getReviews, resolveApp, runPass, flowPass } from './lib/handlers.ts';
-import { migrate } from './lib/cache.ts';
+import { flowPass } from './lib/handlers.ts';
 
-const ROUTES: Record<string, (req: Request) => Promise<Response>> = {
-  'resolve-app': resolveApp,
-  'get-reviews': getReviews,
-};
+// ---- Rate limits on AI calls ----
 
-// ---- Rate limits on AI calls (run-pass and flow-pass are the routes that call the AI) ----
-
-const PER_VISITOR = Number(Deno.env.get('AI_CALLS_PER_HOUR') ?? 30);
-const PER_DAY = Number(Deno.env.get('AI_CALLS_PER_DAY') ?? 300);
+const PER_VISITOR = Number(Deno.env.get('AI_CALLS_PER_HOUR') ?? 60);
+const PER_DAY = Number(Deno.env.get('AI_CALLS_PER_DAY') ?? 1000);
 const visitors = new Map<string, { count: number; resetAt: number }>();
 let day = { count: 0, resetAt: Date.now() + 24 * 3600 * 1000 };
 
@@ -56,12 +49,9 @@ export async function handle(req: Request, info: Deno.ServeHandlerInfo): Promise
 
   const route = url.pathname.match(/^\/api\/([\w-]+)$/)?.[1];
   if (route !== undefined) {
-    // run-pass and flow-pass count against the AI limit only when they start a new job, not when they check on one.
-    if (route === 'run-pass') return runPass(req, () => takeAiCall(visitorId(req, info)));
+    // A step counts against the AI limit only when it starts, not when the browser checks on it.
     if (route === 'flow-pass') return flowPass(req, () => takeAiCall(visitorId(req, info)));
-    const handler = ROUTES[route];
-    if (!handler) return Response.json({ error: 'Not found' }, { status: 404 });
-    return handler(req);
+    return Response.json({ error: 'Not found' }, { status: 404 });
   }
 
   // The web app. Unknown paths without a file extension get index.html (client-side screens).
@@ -71,11 +61,5 @@ export async function handle(req: Request, info: Deno.ServeHandlerInfo): Promise
 }
 
 if (import.meta.main) {
-  const schema = await Deno.readTextFile(new URL('./schema.sql', import.meta.url));
-  const usingDb = await migrate(schema).catch((error) => {
-    console.error('Database setup failed; using memory cache.', error);
-    return false;
-  });
-  console.log(`Cache: ${usingDb ? 'Postgres' : 'memory'}`);
   Deno.serve({ port: Number(Deno.env.get('PORT') ?? 8000), hostname: '0.0.0.0' }, handle);
 }

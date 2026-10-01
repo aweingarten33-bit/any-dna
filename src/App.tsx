@@ -11,10 +11,9 @@ import { NewSteer } from '@/screens/newsteer';
 import { NewLoading } from '@/screens/newloading';
 import { NewResult } from '@/screens/newresult';
 import { NewPick } from '@/screens/newpick';
-import { Result } from '@/screens/result';
 import { Saved } from '@/screens/saved';
-import { Divider } from '@/screens/flow';
-import { isNewBlueprint, type Blueprint, type GeneratedIdea, type NewBlueprint, type SavedIdea, type Upload, type UploadRead } from '../server/lib/types.ts';
+import { Screen } from '@/components/bits';
+import { isNewBlueprint, type GeneratedIdea, type NewBlueprint, type SavedIdea, type Upload, type UploadRead } from '../server/lib/types.ts';
 import { uploadLabel } from '@/lib/upload';
 
 type ScreenState =
@@ -67,7 +66,7 @@ export default function App() {
     go({ name: 'result', idea: ideaStore.save(blueprint) });
   }
 
-  function update(entry: SavedIdea, next: Blueprint | NewBlueprint) {
+  function update(entry: SavedIdea, next: NewBlueprint) {
     const updated = ideaStore.update(entry.id, next);
     if (!updated) return;
     setScreen((current) => (current.name === 'result' && current.idea.id === entry.id ? { name: 'result', idea: updated } : current));
@@ -112,17 +111,11 @@ export default function App() {
       const entry = screen.idea;
       const blueprint = entry.output_json;
       bar = topBar({ left: close, title: blueprint.idea.name });
-      if (isNewBlueprint(blueprint)) {
-        body = <NewResult blueprint={blueprint} onStartOver={goHome} onUpdate={(next) => update(entry, next)} />;
-      } else if (blueprint.version === 2) {
-        // Ideas saved from the earlier app-based version still open.
-        body = <Result blueprint={blueprint} onStartOver={goHome} onUpdate={(next) => update(entry, next)} onDifferentAudience={goHome} />;
-      } else {
-        // Saved before either current format: there's nothing safe to show.
-        const name = (blueprint as { idea?: { name?: string } }).idea?.name ?? 'This idea';
-        body = <Divider n="!" part="Saved with an older version" title="Make a new one" sub={`${name} was saved with an older version that can’t be shown any more.`} action="Start"
-          band={[name]} onContinue={goHome} />;
-      }
+      body = isNewBlueprint(blueprint)
+        ? <NewResult blueprint={blueprint} onStartOver={goHome} onUpdate={(next) => update(entry, next)} />
+        // Saved by the earlier app-based version: there's nothing that can be shown any more.
+        : <Screen title={blueprint.idea.name} sub="This was saved with an earlier version of the app and can’t be opened any more."
+            actions={<button type="button" className="btn-pill is-primary" onClick={goHome}><span>Make a new one</span></button>} />;
       break;
     }
     case 'saved':

@@ -1,13 +1,13 @@
 // Saved ideas. v1 keeps them on this device. Records have the same shape as
 // the ideas table, so a server-backed store can replace this one once accounts exist.
 import { useSyncExternalStore } from 'react';
-import type { Blueprint, NewBlueprint, SavedIdea } from '../../server/lib/types.ts';
+import type { NewBlueprint, SavedIdea } from '../../server/lib/types.ts';
 
 export type IdeaStore = {
   list(): SavedIdea[];
-  save(blueprint: Blueprint | NewBlueprint): SavedIdea;
+  save(blueprint: NewBlueprint): SavedIdea;
   /** Replaces a saved idea's blueprint (when the mockup or business plan arrives). */
-  update(id: string, blueprint: Blueprint | NewBlueprint): SavedIdea | null;
+  update(id: string, blueprint: NewBlueprint): SavedIdea | null;
   remove(id: string): void;
   subscribe(listener: () => void): () => void;
 };
@@ -38,7 +38,7 @@ function createLocalStore(): IdeaStore {
       const idea: SavedIdea = {
         id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         created_at: new Date().toISOString(),
-        source_app_id: blueprint.version === 3 ? '' : blueprint.app.app_id,
+        source_app_id: '',
         audience: blueprint.audience,
         output_json: blueprint,
       };

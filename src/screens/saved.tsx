@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { ArrowRight, Trash2 } from 'lucide-react';
-import { AppIcon, Screen } from '@/components/bits';
+import { Screen } from '@/components/bits';
 import { isNewBlueprint, type SavedIdea } from '../../server/lib/types.ts';
 
 export function Saved({ ideas, onOpen, onDelete, onNew }: {
@@ -22,7 +22,7 @@ export function Saved({ ideas, onOpen, onDelete, onNew }: {
                 <span className="saved-n">{String(i + 1).padStart(2, '0')}</span>
                 <span className="saved-text">
                   <b>{idea.name}</b>
-                  <small>{isNewBlueprint(blueprint) ? blueprint.upload.label : <><AppIcon app={blueprint.app} size={16} />{blueprint.app.name}</>} <ArrowRight size={11} aria-hidden="true" /> {item.audience}</small>
+                  <small>{isNewBlueprint(blueprint) ? <>{blueprint.upload.label} <ArrowRight size={11} aria-hidden="true" /> {item.audience}</> : 'Saved with an earlier version'}</small>
                 </span>
               </button>
               <div className="saved-actions">

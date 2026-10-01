@@ -154,9 +154,6 @@ const THIRD_IDEA = { ...PARTS.generate, name: 'Glowstick', tagline: 'Your phone 
 
 // deno-lint-ignore no-explicit-any
 export const PASS_FIXTURES: Record<string, any> = {
-  dissect: PARTS.dissect,
-  gaps: PARTS.gaps,
-  build: { idea: PARTS.mutate },
   kit: PARTS.kit,
   plan: PARTS.plan,
   suggest: PARTS.suggest,
@@ -171,9 +168,6 @@ export const PASS_FIXTURES: Record<string, any> = {
 };
 
 function whichPass(system: string) {
-  if (system.includes('find the tricks inside it')) return 'dissect';
-  if (system.includes('find the complaints that repeat')) return 'gaps';
-  if (system.includes('You design one new app')) return 'build';
   if (system.includes('suggest 4 to 6 audiences')) return 'suggest';
   if (system.includes('PART 2 — Extract DNA')) return 'read';
   if (system.includes('Return: 3 ideas. Fields for each')) return 'invent';
