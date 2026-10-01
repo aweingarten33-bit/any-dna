@@ -57,7 +57,7 @@ export type Competitor = CompetitorListing & {
   overlap: string;
 };
 
-// ---- The new front door: ideas from the upload itself ------------------------
+// ---- The front door: literally anything can be the source ---------------------
 
 /** What the user dropped in, as the browser sends it. The bytes travel with each request and are never stored. */
 export type Upload =
@@ -67,10 +67,26 @@ export type Upload =
   /** Still frames taken on the phone; the video itself is never uploaded. */
   | { kind: 'video'; frames: string[]; filename: string }
   | { kind: 'document'; dataUrl: string; filename: string }
-  /** A pasted Spotify, Apple Music, YouTube, TikTok or Instagram link. The server reads what the service shares. */
+  /** A pasted supported public link. The server reads only that source's public preview/content. */
   | { kind: 'link'; url: string };
 
-/** The full output of the new generate pass. */
+/** One turn of the new single-call creative exercise. */
+export type ExerciseTurn = {
+  /** One short sentence: what is actually worth stealing from the source. */
+  take: string;
+  dna: Array<{ name: string; explanation: string }>;
+  ideas: Array<{
+    name: string;
+    pitch: string;
+    what_you_do: string;
+    why_youd_use_it: string;
+    first_version: string;
+  }>;
+  /** Natural reactions the person can tap to steer the next turn. */
+  reactions: Array<{ label: string; instruction: string }>;
+};
+
+/** The full output of the old generate pass. Kept for saved ideas and the old result tools. */
 export type GeneratedIdea = {
   name: string;
   tagline: string;
@@ -88,9 +104,9 @@ export type GeneratedIdea = {
   search_terms: string[];
 };
 
-export type NewPassName = 'suggest' | 'research' | 'dna' | 'generate' | 'filter' | 'compete' | 'kit' | 'plan';
+export type NewPassName = 'exercise' | 'suggest' | 'research' | 'dna' | 'generate' | 'filter' | 'compete' | 'kit' | 'plan';
 
-/** Prompt 3's optional modes the app offers. (Collide needs a second source.) */
+/** Prompt 3's optional modes the app offered before the conversational exercise. */
 export type GenerateMode = 'repurpose' | 'x1000' | 'future' | 'angle';
 
 /** Prompt 1: why the source works. */
@@ -119,7 +135,7 @@ export type FilterResult = {
   found?: Array<{ competitors: Competitor[]; searched: CompetitorListing[] }>;
 };
 
-/** Everything one new-flow run produces. */
+/** Everything one old-flow run produces. */
 export type NewBlueprint = {
   /** 4 since the ANY DNA prompts (research and DNA are separate stages). */
   version: 4;
@@ -158,7 +174,7 @@ export type SavedIdea = {
 /** Ideas saved by earlier versions. They can't be shown any more; only their name is kept. */
 export type LegacyBlueprint = { version?: 1 | 2 | 3; idea: { name: string }; audience: string };
 
-/** Ideas made by this version are version 4. */
+/** Ideas made by the previous pipeline are version 4. */
 export function isNewBlueprint(blueprint: NewBlueprint | LegacyBlueprint): blueprint is NewBlueprint {
   return blueprint.version === 4;
 }
