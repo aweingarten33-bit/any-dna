@@ -1,14 +1,25 @@
 // Turning the user's drop into an upload the server can read.
-// Photos are downscaled to 1600px so they stay fast; HEIC (iPhone photos)
-// is converted to JPEG. The bytes never leave this device except to the
-// server for the single AI call — nothing is stored.
+// Photos are resized on-device before upload. Videos become a few small still
+// frames on-device, so the original video never has to be uploaded.
 import type { Upload } from '../../server/lib/types.ts';
 import { LINK_NAMES, linkSource } from '../../server/lib/link-sources.ts';
 
-const MAX_DIMENSION = 1600;
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_DIMENSION = 1400;
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const MAX_PHOTO_SOURCE_BYTES = 40 * 1024 * 1024;
+const MEDIA_STEP_TIMEOUT_MS = 8_000;
 
 export class UploadError extends Error {}
+
+function timeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new UploadError(message)), ms);
+    promise.then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
+}
 
 function readAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -19,64 +30,111 @@ function readAsDataURL(file: File): Promise<string> {
   });
 }
 
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
+function loadImageUrl(url: string): Promise<HTMLImageElement> {
+  return timeout(new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new UploadError('That photo couldn’t be opened. Try a JPEG or PNG.'));
-    image.src = dataUrl;
-  });
+    image.onerror = () => reject(new UploadError('That photo couldn’t be opened. Try another photo.'));
+    image.src = url;
+  }), MEDIA_STEP_TIMEOUT_MS, 'That photo is taking too long to open. Try another one.');
 }
 
 function isHeic(file: File) {
   return file.type === 'image/heic' || file.type === 'image/heif' || /\.hei[cf]$/i.test(file.name);
 }
 
+/** Resize before upload. Avoid first copying a large phone photo into a huge base64 string. */
 async function photoDataURL(file: File): Promise<string> {
-  const original = await readAsDataURL(file);
-  const image = await loadImage(original);
-  const scale = Math.min(1, MAX_DIMENSION / Math.max(image.width, image.height));
-  const width = Math.round(image.width * scale);
-  const height = Math.round(image.height * scale);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  canvas.getContext('2d')?.drawImage(image, 0, 0, width, height);
-  const converted = canvas.toDataURL('image/jpeg', 0.85);
-  if (!converted || converted === 'data:,') throw new UploadError('That photo couldn’t be converted. Try a JPEG or PNG.');
-  return converted;
+  if (file.size > MAX_PHOTO_SOURCE_BYTES) throw new UploadError('That photo is too large. Try a regular photo instead of RAW.');
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await loadImageUrl(url);
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new UploadError('That photo couldn’t be prepared. Try another one.');
+    context.drawImage(image, 0, 0, width, height);
+    const converted = canvas.toDataURL('image/jpeg', 0.78);
+    if (!converted || converted === 'data:,') throw new UploadError('That photo couldn’t be prepared. Try another one.');
+    return converted;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
-const FRAME_SIZE = 768;
-const FRAME_COUNT = 4;
+const FRAME_SIZE = 640;
+const FRAME_POINTS = [0.15, 0.5, 0.85] as const;
 
-/** Four still frames from across a video. The video itself never leaves the phone. */
+function waitForVideoMetadata(video: HTMLVideoElement): Promise<void> {
+  if (video.readyState >= 1 && Number.isFinite(video.duration)) return Promise.resolve();
+  return timeout(new Promise<void>((resolve, reject) => {
+    const done = () => { cleanup(); resolve(); };
+    const fail = () => { cleanup(); reject(new UploadError('That video couldn’t be opened. Try another phone video.')); };
+    const cleanup = () => {
+      video.removeEventListener('loadedmetadata', done);
+      video.removeEventListener('error', fail);
+    };
+    video.addEventListener('loadedmetadata', done, { once: true });
+    video.addEventListener('error', fail, { once: true });
+  }), MEDIA_STEP_TIMEOUT_MS, 'That video is taking too long to open. Try a shorter one.');
+}
+
+/** Attach listeners before changing currentTime. Otherwise fast phones can fire seeked before we listen and hang forever. */
+function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
+  if (Math.abs(video.currentTime - time) < 0.02) return Promise.resolve();
+  return timeout(new Promise<void>((resolve, reject) => {
+    const done = () => { cleanup(); resolve(); };
+    const fail = () => { cleanup(); reject(new UploadError('That video couldn’t be read. Try another one.')); };
+    const cleanup = () => {
+      video.removeEventListener('seeked', done);
+      video.removeEventListener('error', fail);
+    };
+    video.addEventListener('seeked', done, { once: true });
+    video.addEventListener('error', fail, { once: true });
+    try {
+      video.currentTime = time;
+    } catch {
+      cleanup();
+      reject(new UploadError('That video couldn’t be read. Try another one.'));
+    }
+  }), MEDIA_STEP_TIMEOUT_MS, 'That video is taking too long to read. Try a shorter one.');
+}
+
+/** Three small still frames from across a video. The original video never leaves the phone. */
 async function videoFrames(file: File): Promise<string[]> {
   const url = URL.createObjectURL(file);
   try {
     const video = document.createElement('video');
     video.muted = true;
     video.playsInline = true;
-    video.preload = 'auto';
+    video.preload = 'metadata';
     video.src = url;
-    await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new UploadError('That video couldn’t be opened. Try an MP4 or a phone video.'));
-    });
+    video.load();
+    await waitForVideoMetadata(video);
+
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1;
-    const scale = Math.min(1, FRAME_SIZE / Math.max(video.videoWidth || FRAME_SIZE, video.videoHeight || FRAME_SIZE));
+    const sourceWidth = video.videoWidth || FRAME_SIZE;
+    const sourceHeight = video.videoHeight || FRAME_SIZE;
+    const scale = Math.min(1, FRAME_SIZE / Math.max(sourceWidth, sourceHeight));
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round((video.videoWidth || FRAME_SIZE) * scale);
-    canvas.height = Math.round((video.videoHeight || FRAME_SIZE) * scale);
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
     const context = canvas.getContext('2d');
+    if (!context) throw new UploadError('That video couldn’t be prepared. Try another one.');
+
     const frames: string[] = [];
-    for (let i = 0; i < FRAME_COUNT; i += 1) {
-      video.currentTime = duration * (0.1 + (0.8 * i) / (FRAME_COUNT - 1));
-      await new Promise<void>((resolve) => { video.onseeked = () => resolve(); });
-      context?.drawImage(video, 0, 0, canvas.width, canvas.height);
-      frames.push(canvas.toDataURL('image/jpeg', 0.8));
+    for (const point of FRAME_POINTS) {
+      const target = Math.max(0, Math.min(duration - 0.01, duration * point));
+      await seekVideo(video, target);
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const frame = canvas.toDataURL('image/jpeg', 0.72);
+      if (!frame || frame === 'data:,') throw new UploadError('That video couldn’t be read. Try another one.');
+      frames.push(frame);
     }
-    if (!frames.length || frames[0] === 'data:,') throw new UploadError('That video couldn’t be read. Try another one.');
     return frames;
   } finally {
     URL.revokeObjectURL(url);
@@ -126,13 +184,16 @@ function isSong(file: File) {
 }
 
 export async function fileToUpload(file: File): Promise<Upload> {
-  // Songs and videos are read on the phone (tags, still frames), so their size doesn't matter here.
+  // Songs and videos are read locally (tags or still frames), so the whole media file is never uploaded.
   if (isSong(file)) return songUpload(file);
   if (isVideo(file)) return { kind: 'video', frames: await videoFrames(file), filename: file.name };
-  if (file.size > MAX_BYTES) throw new UploadError('That file is too big. Keep it under 10 MB.');
+
+  // Photos are allowed to start much larger because we shrink them before they leave the phone.
   if (file.type.startsWith('image/') || isHeic(file)) {
     return { kind: 'photo', dataUrl: await photoDataURL(file), filename: file.name };
   }
+
+  if (file.size > MAX_DOCUMENT_BYTES) throw new UploadError('That document is too big. Keep it under 10 MB.');
   const name = file.name.toLowerCase();
   if (file.type === 'application/pdf' || name.endsWith('.pdf')) {
     return { kind: 'document', dataUrl: await readAsDataURL(file), filename: file.name };
