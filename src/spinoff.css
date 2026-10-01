@@ -559,3 +559,40 @@
 .callbacks li { display: grid; gap: 3px; padding: 14px 16px; border-radius: 18px; border: 1px solid var(--hair); background: rgba(244, 241, 234, 0.03); }
 .callbacks b { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 19px; color: var(--paper); }
 .callbacks p { font-size: 14.5px; line-height: 1.45; color: var(--paper-2); }
+
+/* ---- Template thumbnails ---- */
+.tpl-thumb {
+  position: relative; overflow: hidden; display: grid; place-items: center; height: 92px; margin: -6px -6px 4px; border-radius: 16px; color: #fff;
+  background: radial-gradient(120% 120% at 0% 0%, var(--a), var(--b));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.tpl-thumb i { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+.tpl-thumb i:nth-child(1) { width: 110px; height: 110px; right: -34px; top: -46px; }
+.tpl-thumb i:nth-child(2) { width: 60px; height: 60px; left: -18px; bottom: -26px; background: rgba(0, 0, 0, 0.12); }
+.tpl-thumb svg { position: relative; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.25)); }
+
+/* ---- Describe it (Kaiber-style) ---- */
+.direct { display: grid; gap: 10px; margin-top: 26px; }
+.direct-k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--paper-3); }
+.direct-k em { font-style: normal; margin-left: 8px; color: var(--paper-3); opacity: 0.7; }
+.direct textarea {
+  width: 100%; resize: vertical; min-height: 92px; padding: 14px 16px; border-radius: 18px; font: inherit; font-size: 16px; line-height: 1.45;
+  color: var(--paper); background: rgba(244, 241, 234, 0.04); border: 1px solid var(--hair-2); outline: none;
+}
+.direct textarea:focus { border-color: var(--paper-2); }
+.direct textarea::placeholder { color: var(--paper-3); }
+
+/* ---- Pick your app ---- */
+.pick-list { list-style: none; display: grid; gap: 12px; margin-top: 6px; }
+.pick-card {
+  width: 100%; display: grid; gap: 8px; padding: 20px; border-radius: 26px; text-align: left; color: var(--paper);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(79, 134, 255, 0.14), transparent 60%), rgba(244, 241, 234, 0.035); border: 1px solid var(--hair-2);
+  transition: border-color 0.2s, transform 0.15s var(--out);
+}
+.pick-card:active { transform: scale(0.99); }
+@media (hover: hover) { .pick-card:hover { border-color: var(--paper-2); } }
+.pick-n { font-family: var(--mono); font-size: 11px; color: var(--paper-3); }
+.pick-name { font-size: clamp(34px, 10vw, 48px); font-weight: 600; letter-spacing: -0.05em; line-height: 1; background: var(--ink-grad); -webkit-background-clip: text; background-clip: text; color: transparent; padding-bottom: 0.05em; }
+.pick-tagline { font-family: var(--serif); font-style: italic; font-size: 21px; line-height: 1.25; color: var(--paper); }
+.pick-what { font-size: 15px; line-height: 1.5; color: var(--paper-2); }
+.pick-go { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 14.5px; font-weight: 600; color: var(--paper); }

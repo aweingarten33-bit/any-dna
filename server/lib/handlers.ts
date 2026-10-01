@@ -3,9 +3,9 @@
 import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
 import { PassError } from './ai.ts';
 import { AppStoreError, closestCompetitors, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
-import { runAudienceSuggest, runBuild, runDissect, runGaps, runGenerate, runKit, runPlan, type UploadInput } from './passes.ts';
+import { runAudienceSuggest, runBuild, runDissect, runFilter, runGaps, runInvent, runKit, runPlan, runRead, type UploadInput } from './passes.ts';
 import { getLowStarReviews, reviewProvider } from './reviews.ts';
-import { generateSchema, ideaSchema } from './schemas.ts';
+import { generateSchema, ideaSchema, readSchema } from './schemas.ts';
 import type { AppListing, NewPassName, PassName, Review, ReviewsSummary } from './types.ts';
 import { unzipSync } from 'npm:fflate@^0.8.2';
 
@@ -310,14 +310,24 @@ async function sha256Hex(input: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** A job key from the request body, without the megabytes of upload bytes. Only suggest and generate read the upload. */
+/** A job key from the request body, without the megabytes of upload bytes. Only suggest and read read the upload. */
 async function flowKey(pass: string, body: Record<string, unknown>): Promise<string> {
   const raw = (body.upload ?? {}) as RawUpload;
-  const uploadRef = pass === 'suggest' || pass === 'generate'
+  const uploadRef = pass === 'suggest' || pass === 'read'
     ? await sha256Hex(`${raw.kind}:${typeof raw.dataUrl === 'string' ? raw.dataUrl : typeof raw.text === 'string' ? raw.text : ''}`)
     : null;
-  const ideaRef = body.idea ? await sha256Hex(JSON.stringify(body.idea)) : null;
-  return JSON.stringify([pass, uploadRef, pass === 'suggest' ? null : body.audience ?? null, pass === 'generate' ? body.templateId ?? null : null, ideaRef, body.country ?? 'us']);
+  return sha256Hex(JSON.stringify([pass, uploadRef, { ...body, upload: undefined }]));
+}
+
+function readOf(value: unknown) {
+  const parsed = readSchema.safeParse(value);
+  if (!parsed.success) throw new HttpError(400, 'This step needs the reading from the first step.');
+  return parsed.data;
+}
+
+function ideasOf(value: unknown) {
+  if (!Array.isArray(value) || !value.length) throw new HttpError(400, 'This step needs the ideas from the invent step.');
+  return value.slice(0, 3).map(generatedIdeaOf);
 }
 
 function generatedIdeaOf(value: unknown) {
@@ -339,18 +349,21 @@ function toKitIdea(idea: ReturnType<typeof generatedIdeaOf>, audience: string) {
   };
 }
 
-const FLOW_PASSES: NewPassName[] = ['suggest', 'generate', 'compete', 'kit', 'plan'];
+const FLOW_PASSES: NewPassName[] = ['suggest', 'read', 'invent', 'filter', 'compete', 'kit', 'plan'];
 
 async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Promise<unknown> {
   const country = countryOf(body.country);
-  const audience = pass === 'suggest' ? '' : text(body.audience, 'audience', 80);
+  const audience = pass === 'suggest' || pass === 'filter' ? '' : text(body.audience, 'audience', 80);
   const templateId = typeof body.templateId === 'string' && body.templateId ? body.templateId.slice(0, 40) : undefined;
+  const direction = typeof body.direction === 'string' && body.direction.trim() ? body.direction.trim().slice(0, 600) : undefined;
 
-  if (pass === 'suggest' || pass === 'generate') {
+  if (pass === 'suggest' || pass === 'read') {
     const upload = await normalizeUpload(body.upload);
     if (pass === 'suggest') return { output: await runAudienceSuggest(upload) };
-    return { output: await runGenerate(upload, audience, templateId) };
+    return { output: await runRead(upload, audience, direction) };
   }
+  if (pass === 'invent') return { output: await runInvent(readOf(body.read), audience, direction, templateId) };
+  if (pass === 'filter') return { output: await runFilter(ideasOf(body.ideas), readOf(body.read)) };
 
   const idea = generatedIdeaOf(body.idea);
   const kitIdea = toKitIdea(idea, audience);

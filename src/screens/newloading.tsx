@@ -1,17 +1,17 @@
-// Building the idea: one AI step reads the upload and invents the app, then a
-// quick App Store search. The idea card appears as soon as it's written.
+// Inventing the app, in the workbench's stages. What each stage finds shows up
+// as soon as it's done: the upload's meaning and DNA, then the ideas.
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ArrowRight, Check, RefreshCw, X } from 'lucide-react';
 import { Fade, Screen } from '@/components/bits';
 import { NEW_STEPS, useNewRun, type NewStepId, type StepState } from '@/lib/newrun';
 import { uploadLabel } from '@/lib/upload';
-import type { NewBlueprint, Upload } from '../../server/lib/types.ts';
+import type { GeneratedIdea, Upload, UploadRead } from '../../server/lib/types.ts';
 
 const STATE_TEXT: Record<StepState, string> = { waiting: 'Waiting', running: 'Working', done: 'Done', failed: 'Failed' };
 
-/** The idea step is most of the wait, so it eases toward 90% and the search finishes the rest. */
+/** Each stage moves the meter toward its share; reading and inventing are most of the wait. */
 function useMeter(states: Record<NewStepId, StepState>) {
-  const target = states.compete === 'done' ? 100 : states.build === 'done' ? 92 : states.build === 'running' ? 88 : 0;
+  const target = states.filter === 'done' ? 100 : states.invent === 'done' ? 92 : states.read === 'done' ? (states.invent === 'running' ? 86 : 40) : states.read === 'running' ? 36 : 0;
   const [value, setValue] = useState(0);
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -34,13 +34,14 @@ function useSlow(running: boolean, after = 25_000) {
   return slow;
 }
 
-export function NewLoading({ upload, audience, templateId, onDone, onBack }: {
-  upload: Upload; audience: string; templateId: string | null;
-  onDone: (blueprint: NewBlueprint) => void; onBack: () => void;
+export function NewLoading({ upload, audience, direction, templateId, onDone, onBack }: {
+  upload: Upload; audience: string; direction: string; templateId: string | null;
+  onDone: (read: UploadRead, kept: GeneratedIdea[]) => void; onBack: () => void;
 }) {
-  const { states, progress, error, retry } = useNewRun(upload, audience, templateId, onDone);
+  const { states, progress, error, retry } = useNewRun(upload, audience, direction, templateId, onDone);
   const meter = useMeter(states);
-  const slow = useSlow(states.build === 'running');
+  const slow = useSlow(states.read === 'running' || states.invent === 'running');
+  const found = !!(progress.read || progress.ideas);
   return <Screen n="03" label="The idea" title="Inventing your app"
     sub={<span className="route"><span>{uploadLabel(upload)}</span><ArrowRight size={14} /><span>{audience}</span></span>}
     actions={error
@@ -50,18 +51,22 @@ export function NewLoading({ upload, audience, templateId, onDone, onBack }: {
         </>
       : <button type="button" className="btn-pill" onClick={onBack}><span>Cancel</span></button>}>
     {upload.kind === 'photo' && <Fade delay={120}><img className="upload-thumb" src={upload.dataUrl} alt="What you uploaded" /></Fade>}
-    <div className={`meter fade${progress.idea ? ' is-compact' : ''}`} style={{ '--d': '240ms' } as CSSProperties} aria-hidden="true">
+    <div className={`meter fade${found ? ' is-compact' : ''}`} style={{ '--d': '240ms' } as CSSProperties} aria-hidden="true">
       <span className="meter-num">{meter}</span><span className="meter-pct">%</span>
     </div>
     <div className="meter-rail" aria-hidden="true"><i style={{ transform: `scaleX(${meter / 100})` }} /></div>
-    {progress.idea && <section className="feed" aria-live="polite">
-      <article className="find">
-        <p className="find-k">Your app</p>
-        <p className="find-name">{progress.idea.name}</p>
-        <p className="find-quote is-small">{progress.idea.tagline}</p>
-      </article>
+    {found && <section className="feed" aria-live="polite">
+      {progress.ideas && <article className="find">
+        <p className="find-k">3 apps invented</p>
+        <ol className="find-tricks">{progress.ideas.map((idea) => <li key={idea.name}><b>{idea.name}</b><span>{idea.tagline}</span></li>)}</ol>
+      </article>}
+      {progress.read && <article className="find is-dna">
+        <p className="find-k">What it really is</p>
+        <p className="find-quote">{progress.read.meaning}</p>
+        <ol className="find-tricks">{progress.read.mechanics.map((mechanic) => <li key={mechanic.name}><b>{mechanic.name}</b><span>{mechanic.chain}</span></li>)}</ol>
+      </article>}
     </section>}
-    <ol className={`rail${progress.idea ? ' is-compact' : ''}`} aria-live="polite">
+    <ol className={`rail${found ? ' is-compact' : ''}`} aria-live="polite">
       {NEW_STEPS.map((step, i) => {
         const state = states[step.id];
         return <li key={step.id} className={`is-${state}`}>
@@ -76,6 +81,6 @@ export function NewLoading({ upload, audience, templateId, onDone, onBack }: {
     </ol>
     {error ? <p className="flow-error" role="alert">{error}</p>
       : slow ? <p className="screen-note" role="status">Still thinking. It reads what you dropped in literally and figuratively before it invents anything, which can take a minute. You can lock your phone; it picks up where it left off.</p>
-      : <p className="screen-note">It reads what you dropped in, finds the pattern underneath, and builds a real app around it.</p>}
+      : <p className="screen-note">It reads what you dropped in, finds the pattern underneath, invents 3 apps, and keeps only the ones a stranger would get.</p>}
   </Screen>;
 }

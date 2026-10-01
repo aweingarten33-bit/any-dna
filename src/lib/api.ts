@@ -1,6 +1,6 @@
 // Calls to Spinoff's API. Same origin in production; in development Vite
 // forwards /api to the local server (see vite.config.ts).
-import type { AppListing, BusinessPlan, Competitor, CompetitorListing, Dissect, Gaps, GeneratedIdea, Idea, Kit, ReviewsSummary, Upload } from '../../server/lib/types.ts';
+import type { AppListing, BusinessPlan, Competitor, CompetitorListing, Dissect, Gaps, GeneratedIdea, Idea, Kit, ReviewsSummary, Upload, UploadRead } from '../../server/lib/types.ts';
 
 const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
 
@@ -68,11 +68,16 @@ export const api = {
     post<{ output: BusinessPlan }>('run-pass', { pass: 'plan', app_id: app.app_id, country: app.country, audience, idea }, signal),
 
   // ---- the new front door: ideas from the upload itself ----
-  // Only suggest and generate send the upload; the later steps work from the idea.
+  // Only suggest and read send the upload; the later steps work from the reading and the idea.
   flowSuggest: (upload: Upload, signal?: AbortSignal) =>
     post<{ output: { audiences: string[] } }>('flow-pass', { pass: 'suggest', upload }, signal),
-  flowGenerate: (upload: Upload, audience: string, templateId: string | null, signal?: AbortSignal) =>
-    post<{ output: GeneratedIdea }>('flow-pass', { pass: 'generate', upload, audience, templateId }, signal),
+  // The main system prompt, in the workbench's stages: 1+2 read the upload, 3 invents 3 ideas, 4 filters them.
+  flowRead: (upload: Upload, audience: string, direction: string, signal?: AbortSignal) =>
+    post<{ output: UploadRead }>('flow-pass', { pass: 'read', upload, audience, direction }, signal),
+  flowInvent: (read: UploadRead, audience: string, direction: string, templateId: string | null, signal?: AbortSignal) =>
+    post<{ output: GeneratedIdea[] }>('flow-pass', { pass: 'invent', read, audience, direction, templateId }, signal),
+  flowFilter: (ideas: GeneratedIdea[], read: UploadRead, signal?: AbortSignal) =>
+    post<{ output: GeneratedIdea[] }>('flow-pass', { pass: 'filter', ideas, read }, signal),
   flowCompete: (audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>
     post<{ competitors: Competitor[]; searched: CompetitorListing[] }>('flow-pass', { pass: 'compete', audience, idea }, signal),
   flowKit: (audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>

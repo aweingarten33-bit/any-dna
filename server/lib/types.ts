@@ -174,7 +174,17 @@ export type GeneratedIdea = {
   search_terms: string[];
 };
 
-export type NewPassName = 'suggest' | 'generate' | 'compete' | 'kit' | 'plan';
+export type NewPassName = 'suggest' | 'read' | 'invent' | 'filter' | 'compete' | 'kit' | 'plan';
+
+/** Stages 1 and 2 of the main prompt: the upload researched, and its DNA. */
+export type UploadRead = {
+  details: string[];
+  meaning: string;
+  why_different: string;
+  conditions: string;
+  unknowns: string[];
+  mechanics: Array<{ name: string; chain: string; how_it_works: string; why_it_works: string; needs: string; transferable: string }>;
+};
 
 /** Everything one new-flow run produces. */
 export type NewBlueprint = {
@@ -183,8 +193,12 @@ export type NewBlueprint = {
   /** What was uploaded, by kind and a short label. Never the bytes. */
   upload: { kind: Upload['kind']; label: string };
   audience: string;
+  /** What the user typed to direct it (niche, feel, what it should do), if anything. */
+  direction?: string;
   /** The template id when the user steered it, or null when they skipped it. */
   templateId: string | null;
+  /** Stages 1 and 2: what the upload is and its DNA. */
+  read: UploadRead;
   idea: GeneratedIdea;
   /** Every App Store search result for the idea's search terms. */
   searched: CompetitorListing[];

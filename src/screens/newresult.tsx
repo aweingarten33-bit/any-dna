@@ -10,8 +10,8 @@ import { BUILDERS, CODE_TOOLS, newBuildPrompt } from '@/lib/build-prompt';
 import type { NewBlueprint } from '../../server/lib/types.ts';
 import { templateById } from '../../server/lib/templates.ts';
 
-const CARDS = ['The idea', 'Build it', 'Competitors', 'Business plan'] as const;
-const SHORT = ['Idea', 'Build', 'Rivals', 'Plan'];
+const CARDS = ['The idea', 'Build it', 'Competitors', 'Business plan', 'Where it came from'] as const;
+const SHORT = ['Idea', 'Build', 'Rivals', 'Plan', 'Origin'];
 
 function Panel({ index, active, title, source, children }: { index: number; active: boolean; title: string; source: ReactNode; children: ReactNode }) {
   return <article className={`bp-panel${active ? ' is-active' : ''}`} aria-roledescription="card" aria-label={`${index + 1} of ${CARDS.length}: ${title}`} aria-hidden={!active}>
@@ -222,6 +222,24 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
         <div className="verdict-actions">
           <button type="button" className="btn-pill" onClick={() => window.print()} data-testid="button-pdf"><span>Save as PDF</span><FileDown size={17} /></button>
           <small className="pdf-hint">Opens the print screen. Choose “Save as PDF”, or on iPhone, share and save to Files.</small>
+        </div>
+      </Panel>
+
+      <Panel index={4} active={active === 4} title="Where it came from" source={<Source />}>
+        <p className="lede">What we read in {blueprint.upload.label}, and the pattern underneath that the app is built on.</p>
+        <blockquote className="pull">{blueprint.read.meaning}</blockquote>
+        <p className="origin-why">{blueprint.read.why_different}</p>
+        <h4 className="sub-head">The details it calls back to</h4>
+        <ul className="ticks big">{blueprint.read.details.map((detail, i) => <li key={i}>{detail}</li>)}</ul>
+        <h4 className="sub-head">Its DNA, strongest first</h4>
+        <ol className="tricks">{blueprint.read.mechanics.map((mechanic, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><div>
+          <b>{mechanic.name}</b>
+          <p className="pattern-chain">{mechanic.chain.split(/\s*(?:→|->)\s*/).map((part, j, all) => <span key={j}><b>{part}</b>{j < all.length - 1 && <ArrowRight size={14} aria-hidden="true" />}</span>)}</p>
+          <p>{mechanic.how_it_works} {mechanic.why_it_works}</p>
+          <small>Needs: {mechanic.needs}</small>
+        </div></li>)}</ol>
+        {blueprint.read.unknowns.length > 0 && <dl className="stack-fields"><Field label="What it can’t tell"><ul className="ticks is-muted">{blueprint.read.unknowns.map((item) => <li key={item}>{item}</li>)}</ul></Field></dl>}
+        <div className="verdict-actions">
           <button type="button" className="btn-pill is-primary" onClick={onStartOver}><span>Make another one</span><ArrowRight size={18} /></button>
         </div>
       </Panel>

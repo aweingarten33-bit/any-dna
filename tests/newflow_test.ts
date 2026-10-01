@@ -19,42 +19,59 @@ async function flowCall(body: unknown, { fresh = true } = {}) {
 
 const TEXT_UPLOAD = { kind: 'text', text: 'an app for people who lose their friends at concerts' };
 
-Deno.test('new flow: upload → audiences → idea → competitors', async () => {
+Deno.test('new flow: upload → audiences → research + DNA → 3 ideas → stranger filter → competitors', async () => {
   const fixtures = installFixtures();
   try {
     const upload = TEXT_UPLOAD;
     const suggest = await flowCall({ pass: 'suggest', upload });
     assertEquals(suggest.status, 200);
-    const audiences = suggest.body.output.audiences as string[];
-    assert(audiences.length >= 4, 'suggests several audiences');
+    assert((suggest.body.output.audiences as string[]).length >= 4, 'suggests several audiences');
 
     const audience = 'Concertgoers';
-    // The name comes out of the same call as the idea, after the thinking.
-    const generate = await flowCall({ pass: 'generate', upload, audience });
-    assertEquals(generate.status, 200);
-    const idea = generate.body.output as GeneratedIdea;
-    assertEquals(idea.name, 'Crowdlight');
-    assertEquals(idea.tagline, 'Find your friends in any crowd, fast.');
-    assertEquals(idea.main_risk, 'Phones lose signal in packed venues, so dots go stale.');
-    assert(idea.pattern.length > 0);
-    assert(idea.callbacks.length > 0);
-    assert(idea.search_terms.length > 0);
+    const direction = 'something for festival weekends';
+    // Stages 1 and 2: the upload researched, and its DNA.
+    const read = await flowCall({ pass: 'read', upload, audience, direction });
+    assertEquals(read.status, 200);
+    assert(read.body.output.mechanics.length >= 2);
+    const readCall = fixtures.aiRequests.find((r) => String(r.body.instructions).includes('PART 2 — Extract DNA'));
+    assertMatch(JSON.stringify(readCall?.body.input), /festival weekends/);
 
-    // A template steer reaches the prompt.
-    const steered = await flowCall({ pass: 'generate', upload, audience, templateId: 'people-map' });
-    assertEquals(steered.status, 200);
-    const steeredCall = fixtures.aiRequests.find((r) => r.provider === 'muse' && JSON.stringify(r.body.input).includes('Find My'));
-    assert(steeredCall, 'the template steer reaches the generate prompt');
+    // Stage 3: three ideas, built from the reading (no upload bytes needed).
+    const invent = await flowCall({ pass: 'invent', audience, direction, read: read.body.output, templateId: 'people-map' });
+    assertEquals(invent.status, 200);
+    const ideas = invent.body.output as GeneratedIdea[];
+    assertEquals(ideas.length, 3);
+    const inventCall = fixtures.aiRequests.find((r) => String(r.body.instructions).includes('Return: 3 ideas'));
+    assertMatch(String(inventCall?.body.input), /Find My/);
 
-    // Competitors come from a real App Store search, no AI. Later passes don't need the upload bytes.
-    const compete = await flowCall({ pass: 'compete', audience, idea });
+    // Stage 4: the blunt stranger keeps the good ones, best first; the rejected one is dropped.
+    const filter = await flowCall({ pass: 'filter', ideas, read: read.body.output });
+    assertEquals(filter.status, 200);
+    const kept = filter.body.output as GeneratedIdea[];
+    assertEquals(kept.map((idea) => idea.name), ['Glowstick', 'Crowdlight']);
+
+    // Competitors come from a real App Store search, no AI.
+    const compete = await flowCall({ pass: 'compete', audience, idea: kept[0] });
     assertEquals(compete.status, 200);
     assert(compete.body.competitors.length > 0 && compete.body.competitors.length <= 5);
 
-    // The mockup words still work with the new idea shape.
-    const kit = await flowCall({ pass: 'kit', audience, idea });
+    const kit = await flowCall({ pass: 'kit', audience, idea: kept[0] });
     assertEquals(kit.status, 200);
     assertEquals((kit.body.output as Kit).screen.cards.length, 3);
+  } finally {
+    fixtures.restore();
+  }
+});
+
+Deno.test('if the stranger rejects every idea, the best-rated one is still shown', async () => {
+  const fixtures = installFixtures({ reply: (pass) => (pass === 'filter' ? { verdicts: [
+    { index: 0, keep: false, desirability: 4, reason: 'x' }, { index: 1, keep: false, desirability: 6, reason: 'y' }, { index: 2, keep: false, desirability: 2, reason: 'z' },
+  ] } : undefined) });
+  try {
+    const read = await flowCall({ pass: 'read', upload: TEXT_UPLOAD, audience: 'Concertgoers' });
+    const invent = await flowCall({ pass: 'invent', audience: 'Concertgoers', read: read.body.output });
+    const filter = await flowCall({ pass: 'filter', ideas: invent.body.output, read: read.body.output });
+    assertEquals((filter.body.output as GeneratedIdea[]).map((idea) => idea.name), ['Huddle']);
   } finally {
     fixtures.restore();
   }

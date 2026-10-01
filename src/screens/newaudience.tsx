@@ -6,11 +6,12 @@ import { api } from '@/lib/api';
 import { uploadLabel } from '@/lib/upload';
 import type { Upload } from '../../server/lib/types.ts';
 
-export function NewAudience({ upload, initial, onPick }: { upload: Upload; initial?: string; onPick: (audience: string) => void }) {
+export function NewAudience({ upload, initial, initialDirection, onPick }: { upload: Upload; initial?: string; initialDirection?: string; onPick: (audience: string, direction: string) => void }) {
   const [audiences, setAudiences] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(initial ?? null);
   const [custom, setCustom] = useState('');
+  const [direction, setDirection] = useState(initialDirection ?? '');
   const audience = (picked ?? custom).trim();
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export function NewAudience({ upload, initial, onPick }: { upload: Upload; initi
 
   return <Screen n="01" label="The audience" title="Who’s it for?"
     sub={<>Pick who the app is for. It’ll be built from {uploadLabel(upload)}.</>}
-    actions={<button type="button" className="btn-pill is-primary" disabled={!audience} onClick={() => onPick(audience)} data-testid="button-build">
+    actions={<button type="button" className="btn-pill is-primary" disabled={!audience} onClick={() => onPick(audience, direction.trim())} data-testid="button-build">
       <span>{audience ? <>Build it for <em>{audience}</em></> : 'Pick an audience'}</span><ArrowRight size={18} />
     </button>}>
     {!audiences && !error && <p className="screen-note" role="status">Reading what you dropped in…</p>}
@@ -55,7 +56,14 @@ export function NewAudience({ upload, initial, onPick }: { upload: Upload; initi
       <label className="aud-other">
         <span className="aud-n">{audiences ? String(audiences.length + 1).padStart(2, '0') : '–'}</span>
         <input value={custom} maxLength={80} placeholder="Someone else…" onChange={(event) => { setCustom(event.target.value); setPicked(null); }}
-          onKeyDown={(event) => { if (event.key === 'Enter' && audience) onPick(audience); }} aria-label="Someone else" data-testid="input-audience" />
+          onKeyDown={(event) => { if (event.key === 'Enter' && audience) onPick(audience, direction.trim()); }} aria-label="Someone else" data-testid="input-audience" />
+      </label>
+    </Fade>
+    <Fade delay={audiences ? 360 + audiences.length * 45 : 360}>
+      <label className="direct">
+        <span className="direct-k">Describe it <em>optional</em></span>
+        <textarea value={direction} maxLength={600} rows={3} onChange={(event) => setDirection(event.target.value)}
+          placeholder="The niche, the feel, or what it should do. Like “for runners training for their first marathon” or “playful, not serious”." data-testid="input-direction" />
       </label>
     </Fade>
   </Screen>;

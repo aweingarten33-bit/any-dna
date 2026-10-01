@@ -63,6 +63,31 @@ export const generateSchema = z.object({
 
 export const generateOutputSchema = z.object({ output: generateSchema });
 
+/** Stages 1 and 2: research the upload and extract its DNA. */
+export const readSchema = z.object({
+  details: z.array(z.string()),
+  meaning: z.string(),
+  why_different: z.string(),
+  conditions: z.string(),
+  unknowns: z.array(z.string()),
+  mechanics: z.array(z.object({
+    name: z.string(),
+    chain: z.string(),
+    how_it_works: z.string(),
+    why_it_works: z.string(),
+    needs: z.string(),
+    transferable: z.string(),
+  })),
+});
+
+/** Stage 3: three ideas. */
+export const inventSchema = z.object({ ideas: z.array(generateSchema) });
+
+/** Stage 4: the blunt stranger's verdicts. Never shown to the user. */
+export const filterSchema = z.object({
+  verdicts: z.array(z.object({ index: z.number(), keep: z.boolean(), desirability: z.number(), reason: z.string() })),
+});
+
 export const kitSchema = z.object({
   screen: z.object({
     title: z.string(),
