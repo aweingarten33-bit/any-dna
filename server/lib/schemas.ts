@@ -87,11 +87,18 @@ const UNSUPPORTED = ['$schema', 'minItems', 'maxItems', 'minLength', 'maxLength'
 
 /** JSON Schema for structured outputs: every object closed, every property required. */
 export function toOutputSchema(schema: z.ZodType): Record<string, unknown> {
-  const clean = (node: unknown): unknown => {
-    if (Array.isArray(node)) return node.map(clean);
+  const clean = (node: unknown, propertyNames = false): unknown => {
+    if (Array.isArray(node)) return node.map((item) => clean(item, false));
     if (!node || typeof node !== 'object') return node;
     const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(node)) if (!UNSUPPORTED.includes(key)) out[key] = clean(value);
+    for (const [key, value] of Object.entries(node)) {
+      // Inside a JSON Schema `properties` map, keys are our field names. A field
+      // may legitimately be called `pattern` or `format`; do not mistake those
+      // names for JSON Schema keywords and delete them.
+      if (propertyNames || !UNSUPPORTED.includes(key)) {
+        out[key] = clean(value, key === 'properties');
+      }
+    }
     if (out.type === 'object' && out.properties) {
       out.additionalProperties = false;
       out.required = Object.keys(out.properties as object);
