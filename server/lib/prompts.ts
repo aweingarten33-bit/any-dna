@@ -53,13 +53,17 @@ Reject:
 - checklists
 - vague concepts
 - ideas where the DNA is decorative instead of essential
+- a feature that obviously belongs inside another app rather than deserving its own app
+- one-off content transformations with no strong reason to come back
+- social posting or reaction gimmicks whose main value is novelty
 
 Each kept idea needs:
 - a real user
-- a real problem
+- a real recurring problem
 - what the user does inside the app
 - what the app does in response
 - a repeatable loop
+- a clear reason to return
 - why it is better than what exists
 - a buildable first version
 
@@ -94,8 +98,10 @@ For each ask:
 - Does this already exist for the same user?
 - Is anything just a gimmick?
 - Is it actually a software app rather than an offline business?
+- Does it deserve to be its own app, or is it really just a feature inside another product?
+- Is there a real reason someone would come back and use it again?
 
-Keep only ideas that are clear, desirable, differentiated, genuinely depend on the DNA, and are software apps.
+Keep only ideas that are clear, desirable, differentiated, genuinely depend on the DNA, deserve to be standalone apps, and solve a recurring job.
 
 Return only the winners.`;
 
