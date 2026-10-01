@@ -7,6 +7,18 @@
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "89496d5dd00f4810205f351759594fc2742bf8eea85a2f2b2d1de59f4bd91576"
     },
+    "prompt-engineering": {
+      "source": "spencerpauly/awesome-cursor-skills",
+      "sourceType": "github",
+      "skillPath": "resources/prompt-engineering/SKILL.md",
+      "computedHash": "c6d111e829f629ecef20db92392e1f460ea2f2cd34c9ed0cf17d3e9e97c49214"
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/systematic-debugging/SKILL.md",
+      "computedHash": "3589907ee34dc8b1b7223a33fac98ab841a9e42f9960ab4433a832f0c6f00be0"
+    },
     "webapp-testing": {
       "source": "anthropics/skills",
       "sourceType": "github",
