@@ -7,6 +7,6 @@ import './index.css';
 import './pre.css';
 import './arc-video.css';
 import './spinoff.css';
-
+import './exercise.css';
 
 createRoot(document.getElementById('root')!).render(<App />);
