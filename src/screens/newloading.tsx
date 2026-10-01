@@ -79,7 +79,7 @@ export function NewLoading({ upload, second, audience, direction, templateId, mo
       </article>}
       {[progress.read, progress.secondRead].map((read, i) => read && <article key={i} className="find is-dna">
         <p className="find-k">{progress.secondRead ? `${uploadLabel(i ? second! : upload)} DNA` : 'DNA'}</p>
-        <ol className="find-tricks">{read.dna.map((mechanic) => <li key={mechanic.name}><b>{mechanic.name}</b><span>{mechanic.chain}</span></li>)}</ol>
+        <ol className="find-tricks">{read.dna.map((mechanic) => <li key={mechanic.name}><b>{mechanic.name}</b><span>{mechanic.how_it_works}</span></li>)}</ol>
       </article>)}
     </section>}
     <ol className={`rail${found ? ' is-compact' : ''}`} aria-live="polite">
