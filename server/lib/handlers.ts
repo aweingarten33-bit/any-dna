@@ -3,7 +3,7 @@
 import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
 import { PassError } from './ai.ts';
 import { AppStoreError, closestCompetitors, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
-import { runBuild, runDissect, runGaps } from './passes.ts';
+import { runBuild, runDissect, runGaps, runKit, runPlan } from './passes.ts';
 import { getLowStarReviews, reviewProvider } from './reviews.ts';
 import { ideaSchema } from './schemas.ts';
 import type { AppListing, PassName, Review, ReviewsSummary } from './types.ts';
@@ -144,7 +144,7 @@ async function loadGaps(appId: string, country: string) {
   return { output, cached: false };
 }
 
-const PASSES: PassName[] = ['dissect', 'gaps', 'build', 'compete'];
+const PASSES: PassName[] = ['dissect', 'gaps', 'build', 'compete', 'kit', 'plan'];
 
 async function doPass(pass: PassName, body: Record<string, unknown>, appId: string, country: string): Promise<unknown> {
   if (pass === 'dissect') { const { output, cached } = await ensureDissect(appId, country); return { output, cached }; }
@@ -154,6 +154,14 @@ async function doPass(pass: PassName, body: Record<string, unknown>, appId: stri
   if (pass === 'build') {
     const [{ listing, output: dissect }, { output: gaps }] = await Promise.all([ensureDissect(appId, country), ensureGaps(appId, country)]);
     return { output: await runBuild(listing, dissect, gaps, audience) };
+  }
+  if (pass === 'kit' || pass === 'plan') {
+    const idea = ideaSchema.safeParse(body.idea);
+    if (!idea.success) throw new HttpError(400, `${pass} needs the idea from the build step`);
+    if (pass === 'kit') return { output: await runKit(idea.data, audience) };
+    // Competitor prices are searched again here rather than taken from the request, so they stay fetched data.
+    const searched = await searchCompetitors(idea.data.search_terms, country, appId);
+    return { output: await runPlan(idea.data, audience, closestCompetitors(searched, 8)) };
   }
   // compete: search the store the way someone in this audience would, and keep the closest matches. No AI.
   const idea = ideaSchema.pick({ search_terms: true }).safeParse(body.idea);
@@ -203,7 +211,9 @@ export function runPass(req: Request, admit: () => string | null = () => null): 
     if (!PASSES.includes(pass)) throw new HttpError(400, `pass must be one of ${PASSES.join(', ')}`);
     const appId = text(body.app_id, 'app_id', 20);
     const country = countryOf(body.country);
-    const key = JSON.stringify([pass, appId, country, pass === 'build' || pass === 'compete' ? body.audience : null, pass === 'compete' ? (body.idea as { search_terms?: unknown })?.search_terms : null]);
+    const audienceKey = pass === 'dissect' || pass === 'gaps' ? null : body.audience;
+    const ideaKey = pass === 'compete' ? (body.idea as { search_terms?: unknown })?.search_terms : pass === 'kit' || pass === 'plan' ? body.idea : null;
+    const key = JSON.stringify([pass, appId, country, audienceKey, ideaKey]);
 
     let job = jobs.get(key);
     // A failure is told once, then forgotten, so "Try again" starts fresh.

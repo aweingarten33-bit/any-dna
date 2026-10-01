@@ -1,17 +1,15 @@
-// The blueprint: one swipeable panel per section.
+// The blueprint: one swipeable panel per section, starting with the idea.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUpRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, FileDown, RefreshCw, Sparkles } from 'lucide-react';
 import { AppIcon, Rating, Source, price } from '@/components/bits';
-import type { Blueprint, FitComponent } from '../../server/lib/types.ts';
+import { PhoneMockup, PhoneSkeleton } from '@/components/mockup';
+import { api } from '@/lib/api';
+import { BUILDERS, CODE_TOOLS, buildPrompt } from '@/lib/build-prompt';
+import { PrintReport } from '@/screens/report';
+import type { Blueprint } from '../../server/lib/types.ts';
 
-const CARDS = ['DNA', 'What survives and what breaks', 'The idea', 'Competitors', 'MVP'] as const;
-const SHORT = ['DNA', 'Fit', 'Idea', 'Rivals', 'MVP'];
-const NEXT = ['DNA', 'What survives', 'The idea', 'Competitors', 'MVP'];
-
-const LABELS: Record<string, string> = {
-  core_loop: 'Core loop', frequency_required: 'Frequency', reward_type: 'Reward', retention_lever: 'Brings people back',
-  monetization_trigger: 'When people pay', network_effect: 'Network effect',
-};
+const CARDS = ['The idea', 'Build it', 'Competitors', 'Business plan', 'Where it came from'] as const;
+const SHORT = ['Idea', 'Build', 'Rivals', 'Plan', 'Origin'];
 
 function Panel({ index, active, title, source, children }: { index: number; active: boolean; title: string; source: ReactNode; children: ReactNode }) {
   return <article className={`bp-panel${active ? ' is-active' : ''}`} aria-roledescription="card" aria-label={`${index + 1} of ${CARDS.length}: ${title}`} aria-hidden={!active}>
@@ -26,21 +24,57 @@ function Panel({ index, active, title, source, children }: { index: number; acti
   </article>;
 }
 
-function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
-  return <div className={`field${wide ? ' is-wide' : ''}`}><dt>{label}</dt><dd>{children}</dd></div>;
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="field"><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
-const STATUS: Record<FitComponent['status'], string> = { survives: 'Survives', adapts: 'Adapts', breaks: 'Breaks' };
+/** Runs an AI extra (the kit or the plan) and reports its state. */
+function useExtra<T>(have: T | undefined, load: (signal: AbortSignal) => Promise<T>, save: (value: T) => void, auto: boolean) {
+  const [state, setState] = useState<'idle' | 'loading' | 'failed'>(have || !auto ? 'idle' : 'loading');
+  const [error, setError] = useState<string | null>(null);
+  const controller = useRef<AbortController | null>(null);
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const start = useRef(async () => {
+    controller.current?.abort();
+    const abort = new AbortController();
+    controller.current = abort;
+    setState('loading');
+    setError(null);
+    try {
+      const value = await load(abort.signal);
+      if (!abort.signal.aborted) { saveRef.current(value); setState('idle'); }
+    } catch (caught) {
+      if (abort.signal.aborted) return;
+      setError(caught instanceof Error ? caught.message : String(caught));
+      setState('failed');
+    }
+  });
+  useEffect(() => {
+    if (auto && !have) void start.current();
+    return () => controller.current?.abort();
+    // Only on mount: a finished extra is saved into the blueprint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return { state, error, start: () => void start.current() };
+}
 
-export function Result({ blueprint, onDifferentAudience, onStartOver }: { blueprint: Blueprint; onDifferentAudience: () => void; onStartOver: () => void }) {
-  const { app, audience, reviews, dissect, gaps, fit_check, idea, searched, verdict } = blueprint;
-  // Ideas saved before the competitor check moved to plain code keep these on the old verdict.
-  const competitors = blueprint.competitors ?? verdict?.competitors ?? [];
-  const mvp = idea.mvp ?? verdict?.mvp ?? [];
-  const monetization = idea.monetization ?? verdict?.monetization ?? '';
-  const mainRisk = idea.main_risk ?? verdict?.main_risk ?? '';
+export function Result({ blueprint, onUpdate, onDifferentAudience, onStartOver }: {
+  blueprint: Blueprint;
+  onUpdate: (next: Blueprint) => void;
+  onDifferentAudience: () => void;
+  onStartOver: () => void;
+}) {
+  const { app, audience, reviews, dissect, gaps, idea, searched, competitors, kit, plan } = blueprint;
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const latest = useRef(blueprint);
+  latest.current = blueprint;
+
+  // The mockup and build plan are written in the background as soon as the blueprint opens.
+  const kitRun = useExtra(kit, (signal) => api.kit(app, audience, idea, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, kit: value }), true);
+  const planRun = useExtra(plan, (signal) => api.plan(app, audience, idea, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, plan: value }), false);
 
   useEffect(() => {
     const element = track.current;
@@ -58,11 +92,17 @@ export function Result({ blueprint, onDifferentAudience, onStartOver }: { bluepr
     setActive(target);
   }
 
-  const counts = { survives: 0, adapts: 0, breaks: 0 };
-  fit_check.components.forEach((row) => { counts[row.status] += 1; });
-  const carryover = gaps.repeated_complaints.filter((complaint) => complaint.about === 'mechanic');
+  const prompt = buildPrompt(idea, kit);
+  async function copyPrompt() {
+    try { await navigator.clipboard.writeText(prompt); } catch { /* clipboard blocked: the prompt is still on screen to select */ }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2200);
+  }
+
+  const topComplaint = gaps.repeated_complaints.find((complaint) => complaint.about === 'mechanic');
 
   return <section className="blueprint">
+    <PrintReport blueprint={blueprint} />
     <div className="bp-top">
       <div className="bp-route"><AppIcon app={app} size={22} /><span>{app.name}</span><ArrowRight size={13} /><span>{audience}</span></div>
       <nav className="segments" aria-label="Blueprint sections">
@@ -76,54 +116,66 @@ export function Result({ blueprint, onDifferentAudience, onStartOver }: { bluepr
       if (event.key === 'ArrowRight') { event.preventDefault(); go(active + 1); }
       if (event.key === 'ArrowLeft') { event.preventDefault(); go(active - 1); }
     }}>
-      <Panel index={0} active={active === 0} title="DNA" source={<Source />}>
-        <p className="lede">Why {app.name} works, with its topic stripped away. Read from the App Store listing and {reviews.low_star_count} recent 1 to 3 star reviews.</p>
-        <blockquote className="pull">{dissect.why_it_works}</blockquote>
-        <dl className="bento-fields">
-          {Object.entries(LABELS).map(([key, label]) => <Field key={key} label={label} wide={key === 'core_loop'}>{dissect[key as keyof typeof LABELS & keyof typeof dissect] as string}</Field>)}
-          {dissect.dependencies.length > 0 && <Field label="Needs" wide><ul className="ticks">{dissect.dependencies.map((item) => <li key={item}>{item}</li>)}</ul></Field>}
-          {dissect.unknowns.length > 0 && <Field label="Unknown from this data" wide><ul className="ticks is-muted">{dissect.unknowns.map((item) => <li key={item}>{item}</li>)}</ul></Field>}
-        </dl>
-      </Panel>
-
-      <Panel index={1} active={active === 1} title="What survives and what breaks" source={<Source />}>
-        <p className="lede">For {audience.toLowerCase()}: does this audience already have the behavior each piece needs?</p>
-        <div className="tally">
-          {(['survives', 'adapts', 'breaks'] as const).map((status) => <div key={status} className={`tally-cell is-${status}`}><b>{counts[status]}</b><span>{STATUS[status]}</span></div>)}
-        </div>
-        <ul className="fit-list">
-          {fit_check.components.map((row) => <li key={row.component} className={`is-${row.status}`}>
-            <div className="fit-top"><b>{LABELS[row.component] ?? row.component}</b><span className="fit-badge">{STATUS[row.status]}</span></div>
-            <p className="fit-behavior">{row.audience_behavior}</p>
-            <p>{row.reason}</p>
-            {row.replacement && <p className="fit-replacement"><ArrowRight size={14} aria-hidden="true" /><span>{row.replacement}</span></p>}
-          </li>)}
-        </ul>
-      </Panel>
-
-      <Panel index={2} active={active === 2} title="The idea" source={<Source />}>
+      <Panel index={0} active={active === 0} title="The idea" source={<Source />}>
         <h3 className="idea-name">{idea.name}</h3>
         <p className="idea-pitch">{idea.pitch}</p>
+        <p className="idea-who">{idea.who_its_for}</p>
+        <h4 className="sub-head">How it works</h4>
+        <ol className="steps">{idea.how_it_works.map((step, i) => <li key={i}><span>{i + 1}</span><p>{step}</p></li>)}</ol>
         <dl className="stack-fields">
-          <Field label="Core loop">{idea.core_loop}</Field>
-          <Field label="What broke, and what replaced it">{idea.what_broke_and_replaced}</Field>
-          <Field label="What makes it different">{idea.differentiator_from_gaps}</Field>
-          <Field label="First session"><ol className="timeline">{idea.first_session_flow.map((step, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span>{step}</li>)}</ol></Field>
+          <Field label={`Borrowed from ${app.name}`}>{idea.borrowed_trick}</Field>
+          <Field label="What’s different">{idea.whats_different}</Field>
+          <Field label="The complaint it fixes">
+            {idea.fixes_complaint}
+            {topComplaint?.example && <blockquote className="quote">“{topComplaint.example}”<cite>A real {app.name} review</cite></blockquote>}
+          </Field>
+          <Field label="Biggest risk">{idea.main_risk}</Field>
         </dl>
-        <section className="evidence">
-          <div className="evidence-head"><h4>Complaints about {app.name}</h4><Source fetched>From {reviews.low_star_count} reviews</Source></div>
-          {gaps.repeated_complaints.length === 0
-            ? <p className="muted">{reviews.low_star_count ? 'No complaint came up in more than one review.' : 'No 1 to 3 star reviews were available to read.'}</p>
-            : <ul>{gaps.repeated_complaints.map((complaint) => <li key={complaint.theme}>
-                <div className="evidence-theme"><span>{complaint.theme}</span><b>{complaint.evidence_count}</b></div>
-                {complaint.example && <blockquote>“{complaint.example}”</blockquote>}
-                {complaint.about === 'subject' && <small>About {app.name}’s own topic, so it doesn’t carry over.</small>}
-              </li>)}</ul>}
-          {gaps.repeated_complaints.length > 0 && carryover.length === 0 && <p className="muted">None of these are about how the app works, so none carry over.</p>}
-        </section>
       </Panel>
 
-      <Panel index={3} active={active === 3} title="Competitors" source={<Source fetched />}>
+      <Panel index={1} active={active === 1} title="Build it" source={<Source />}>
+        <p className="lede">What the first screen could look like, and how to build it this week.</p>
+        <div className="phone-stage">
+          {kit ? <PhoneMockup name={idea.name} screen={kit.screen} /> : kitRun.state === 'failed'
+            ? <div className="extra-failed"><p>{kitRun.error}</p><button type="button" className="btn-pill" onClick={kitRun.start}><span>Try again</span><RefreshCw size={16} /></button></div>
+            : <PhoneSkeleton />}
+        </div>
+
+        <h4 className="sub-head">First version</h4>
+        <ol className="mvp">{idea.mvp.map((item, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><p>{item}</p></li>)}</ol>
+
+        <h4 className="sub-head">Your build prompt</h4>
+        <div className="prompt-box">
+          <pre>{prompt}</pre>
+          <button type="button" className="btn-pill is-primary" onClick={() => void copyPrompt()} data-testid="button-copy-prompt">
+            <span>{copied ? 'Copied' : 'Copy prompt'}</span>{copied ? <Check size={17} /> : <Copy size={17} />}
+          </button>
+        </div>
+
+        <h4 className="sub-head">Build it without code</h4>
+        <ul className="tools">
+          {BUILDERS.map((tool) => <li key={tool.name}>
+            <a href={tool.href(prompt)} target="_blank" rel="noreferrer" onClick={() => { if (!tool.prefilled) void copyPrompt(); }}>
+              <b>{tool.name}<ArrowUpRight size={16} /></b>
+              <p>{tool.what}</p>
+              {!tool.prefilled && <small>Copies the prompt for you</small>}
+            </a>
+          </li>)}
+        </ul>
+        <h4 className="sub-head">Or with code you own</h4>
+        <ul className="tools is-quiet">
+          {CODE_TOOLS.map((tool) => <li key={tool.name}>
+            <a href={tool.url} target="_blank" rel="noreferrer"><b>{tool.name}<ArrowUpRight size={16} /></b><p>{tool.what}</p></a>
+          </li>)}
+        </ul>
+
+        {kit && <>
+          <h4 className="sub-head">Four-week plan</h4>
+          <ol className="weeks">{kit.plan.map((step, i) => <li key={i}><span>{step.when}</span><div><p>{step.goal}</p><small>Done when: {step.done_when}</small></div></li>)}</ol>
+        </>}
+      </Panel>
+
+      <Panel index={2} active={active === 2} title="Competitors" source={<Source fetched />}>
         <p className="lede">Searched the App Store for {idea.search_terms.map((term, i) => <span key={term}>{i > 0 && ', '}<q>{term}</q></span>)}. Found {searched.length} apps. {competitors.length ? `These ${competitors.length} came up the most.` : 'Nothing came up.'}</p>
         <ul className="rivals">
           {competitors.map((comp, i) => <li key={comp.app_id}>
@@ -140,25 +192,74 @@ export function Result({ blueprint, onDifferentAudience, onStartOver }: { bluepr
         <p className="fine">Names, prices and ratings come from the App Store. Prices are upfront prices; Apple doesn’t publish in-app or subscription prices. Coming up in the same search doesn’t mean an app does the same job; open it to check.</p>
       </Panel>
 
-      <Panel index={4} active={active === 4} title="MVP" source={<Source />}>
-        <p className="lede">The smallest version that tests the core loop.</p>
-        <ol className="mvp">{mvp.map((item, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><p>{item}</p></li>)}</ol>
+      <Panel index={3} active={active === 3} title="Business plan" source={<Source />}>
+        <dl className="stack-fields is-first"><Field label="How it makes money">{idea.monetization}</Field></dl>
+        {plan ? <>
+          <p className="plan-summary">{plan.summary}</p>
+          <dl className="stack-fields">
+            <Field label="Who pays">{plan.customer}</Field>
+            <Field label="The problem">{plan.problem}</Field>
+            <Field label="What the app does">{plan.solution}</Field>
+          </dl>
+          <div className="price-card">
+            <span>Price to test</span>
+            <b>{plan.revenue.price_to_test}</b>
+            <p>{plan.revenue.model} {plan.revenue.why}</p>
+          </div>
+          <h4 className="sub-head">What it costs to launch</h4>
+          <ul className="cost-list">{plan.launch_costs.map((cost, i) => <li key={i}><span>{cost.item}</span><b>{cost.estimate}</b></li>)}</ul>
+          <h4 className="sub-head">Finding the first 100 people</h4>
+          <ul className="ticks big">{plan.first_100_users.map((item, i) => <li key={i}>{item}</li>)}</ul>
+          <h4 className="sub-head">First 90 days</h4>
+          <ol className="weeks">{plan.milestones.map((step, i) => <li key={i}><span>{step.when}</span><div><p>{step.goal}</p></div></li>)}</ol>
+          <h4 className="sub-head">Risks, and what to do</h4>
+          <ul className="risk-list">{plan.risks.map((risk, i) => <li key={i}><b>{risk.risk}</b><p>{risk.plan}</p></li>)}</ul>
+          <p className="fine">Prices and costs are suggestions to test, not market data.</p>
+        </> : <div className="plan-cta">
+          <p>Who pays, what to charge, what it costs to launch, where to find your first 100 people, and the first 90 days.</p>
+          <button type="button" className="btn-pill is-primary" disabled={planRun.state === 'loading'} onClick={planRun.start} data-testid="button-plan">
+            <span>{planRun.state === 'loading' ? 'Writing your plan…' : 'Write the business plan'}</span>{planRun.state === 'loading' ? <i className="pulse-dot" /> : <Sparkles size={17} />}
+          </button>
+          {planRun.state === 'loading' && <small>About 20 to 40 seconds.</small>}
+          {planRun.state === 'failed' && <p className="flow-error" role="alert">{planRun.error}</p>}
+        </div>}
+        <div className="verdict-actions">
+          <button type="button" className="btn-pill" onClick={() => window.print()} data-testid="button-pdf"><span>Save as PDF</span><FileDown size={17} /></button>
+          <small className="pdf-hint">Opens the print screen. Choose “Save as PDF”, or on iPhone, share and save to Files.</small>
+        </div>
+      </Panel>
+
+      <Panel index={4} active={active === 4} title="Where it came from" source={<Source />}>
+        <p className="lede">Read from {app.name}’s App Store listing and {reviews.low_star_count} recent 1 to 3 star reviews.</p>
+        <blockquote className="pull">{dissect.what_it_is}</blockquote>
+        <p className="origin-why">{dissect.why_it_works}</p>
+        <h4 className="sub-head">The tricks that make it work</h4>
+        <ol className="tricks">{dissect.tricks.map((trick, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><div><b>{trick.name}</b><p>{trick.how_it_works}</p><small>Needs: {trick.needs}</small></div></li>)}</ol>
         <dl className="stack-fields">
-          <Field label="How it makes money">{monetization}</Field>
-          {mainRisk && <Field label="Main risk">{mainRisk}</Field>}
+          <Field label="How it makes money">{dissect.how_it_makes_money}</Field>
+          {dissect.unknowns.length > 0 && <Field label="What this data can’t tell us"><ul className="ticks is-muted">{dissect.unknowns.map((item) => <li key={item}>{item}</li>)}</ul></Field>}
         </dl>
+        <section className="evidence">
+          <div className="evidence-head"><h4>What people complain about</h4><Source fetched>From {reviews.low_star_count} reviews</Source></div>
+          {gaps.repeated_complaints.length === 0
+            ? <p className="muted">{reviews.low_star_count ? 'No complaint came up in more than one review.' : 'No 1 to 3 star reviews were available to read.'}</p>
+            : <ul>{gaps.repeated_complaints.map((complaint) => <li key={complaint.theme}>
+                <div className="evidence-theme"><span>{complaint.theme}</span><b>{complaint.evidence_count}</b></div>
+                {complaint.example && <blockquote>“{complaint.example}”</blockquote>}
+                {complaint.about === 'subject' && <small>About {app.name}’s own topic, so it wouldn’t follow to a new app.</small>}
+              </li>)}</ul>}
+        </section>
         <div className="verdict-actions">
           <button type="button" className="btn-pill is-primary" onClick={onDifferentAudience} data-testid="button-different-audience"><span>Try a different audience</span><ArrowRight size={18} /></button>
           <button type="button" className="btn-pill" onClick={onStartOver}><span>Start with another app</span></button>
         </div>
       </Panel>
-
     </div>
 
     <div className="bp-nav">
       <button type="button" className="glass-round small" onClick={() => go(active - 1)} disabled={active === 0} aria-label="Previous section"><ArrowLeft size={18} /></button>
       {active < CARDS.length - 1
-        ? <button type="button" className="bp-next" onClick={() => go(active + 1)} aria-label="Next section"><span><small>Next</small>{NEXT[active + 1]}</span><ArrowRight size={18} /></button>
+        ? <button type="button" className="bp-next" onClick={() => go(active + 1)} aria-label="Next section"><span><small>Next</small>{CARDS[active + 1]}</span><ArrowRight size={18} /></button>
         : <span className="bp-end">End of blueprint</span>}
     </div>
   </section>;

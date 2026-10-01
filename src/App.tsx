@@ -73,6 +73,8 @@ export default function App() {
   }
 
   function finish(blueprint: Blueprint) {
+    // Start the mockup on the server now; the blueprint screen joins the same job when it opens.
+    void api.kit(blueprint.app, blueprint.audience, blueprint.idea).catch(() => {});
     const idea = ideaStore.save(blueprint);
     go({ name: 'to-result', idea }, true);
   }
@@ -106,14 +108,28 @@ export default function App() {
     case 'to-result':
       bar = topBar({ left: close });
       body = <Divider n="03" part="Part 3 of 3" title="Your blueprint is ready" sub={`${screen.idea.output_json.idea.name}: five sections, one card each. Swipe through.`} action="Show me"
-        band={[screen.idea.output_json.idea.name, `For ${screen.idea.output_json.audience.toLowerCase()}`, 'Same mechanics']}
+        band={[screen.idea.output_json.idea.name, `For ${screen.idea.output_json.audience.toLowerCase()}`, `Built from ${screen.idea.output_json.app.name}`]}
         onContinue={() => go({ name: 'result', idea: screen.idea }, true)} />;
       break;
-    case 'result':
-      bar = topBar({ left: close, title: screen.idea.output_json.idea.name });
-      body = <Result blueprint={screen.idea.output_json} onStartOver={goHome}
-        onDifferentAudience={() => go({ name: 'audience', app: screen.idea.output_json.app })} />;
+    case 'result': {
+      const entry = screen.idea;
+      const blueprint = entry.output_json;
+      bar = topBar({ left: close, title: blueprint.idea.name });
+      // Ideas saved before the plain-language rewrite have a different shape: offer to run them again.
+      body = blueprint.version !== 2
+        ? <Divider n="!" part="Saved with an older version" title="Run it again" sub={`Spinoff has been rewritten since you saved ${blueprint.idea.name}. Run ${blueprint.app.name} for ${blueprint.audience.toLowerCase()} again to see it in the new format.`} action="Run it again"
+            band={[blueprint.app.name, `For ${blueprint.audience.toLowerCase()}`]}
+            onContinue={() => go({ name: 'loading', app: blueprint.app, audience: blueprint.audience })} />
+        : <Result blueprint={blueprint} onStartOver={goHome}
+            onUpdate={(next) => {
+              const updated = ideaStore.update(entry.id, next);
+              if (!updated) return;
+              setScreen((current) => (current.name === 'result' && current.idea.id === entry.id ? { name: 'result', idea: updated } : current));
+              try { history.replaceState({ screen: { name: 'result', idea: updated } }, ''); } catch { /* state too large for history: fine */ }
+            }}
+            onDifferentAudience={() => go({ name: 'audience', app: blueprint.app })} />;
       break;
+    }
     case 'saved':
       bar = topBar({ left: close });
       body = <Saved ideas={saved} onNew={goHome}

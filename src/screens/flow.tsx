@@ -172,9 +172,10 @@ function Findings({ app, progress }: { app: AppListing; progress: Progress }) {
     <p className="find-k">Reviews</p>
     <p className="find-big">{reviews.low_star_count}<span> recent 1 to 3 star reviews of {app.name}</span></p>
   </article>);
-  if (dissect) cards.push(<article key="dissect" className="find">
-    <p className="find-k">Why {app.name} works</p>
-    <p className="find-quote">{dissect.why_it_works}</p>
+  if (dissect) cards.push(<article key="dissect" className="find is-dna">
+    <p className="find-k">{app.name}’s DNA</p>
+    <p className="find-quote">{dissect.what_it_is}</p>
+    <ol className="find-tricks">{dissect.tricks.map((trick, i) => <li key={i}><b>{trick.name}</b><span>{trick.how_it_works}</span></li>)}</ol>
   </article>);
   const top = gaps?.repeated_complaints[0];
   if (gaps) cards.push(<article key="gaps" className="find">

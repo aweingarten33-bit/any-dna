@@ -3,14 +3,11 @@
 import { z } from 'npm:zod@^4.1.0';
 
 export const dissectSchema = z.object({
-  core_loop: z.string(),
-  frequency_required: z.string(),
-  reward_type: z.string(),
-  retention_lever: z.string(),
-  monetization_trigger: z.string(),
-  network_effect: z.string(),
-  dependencies: z.array(z.string()),
+  what_it_is: z.string(),
+  what_people_do: z.string(),
   why_it_works: z.string(),
+  how_it_makes_money: z.string(),
+  tricks: z.array(z.object({ name: z.string(), how_it_works: z.string(), needs: z.string() })),
   unknowns: z.array(z.string()),
 });
 
@@ -23,31 +20,46 @@ export const gapsModelSchema = z.object({
   })),
 });
 
-export const fitCheckSchema = z.object({
-  components: z.array(z.object({
-    component: z.string(),
-    status: z.enum(['survives', 'adapts', 'breaks']),
-    audience_behavior: z.string(),
-    reason: z.string(),
-    replacement: z.string(),
-  })),
-});
-
 export const ideaSchema = z.object({
   name: z.string(),
   pitch: z.string(),
-  core_loop: z.string(),
-  what_broke_and_replaced: z.string(),
-  first_session_flow: z.array(z.string()),
-  differentiator_from_gaps: z.string(),
+  who_its_for: z.string(),
+  how_it_works: z.array(z.string()),
+  borrowed_trick: z.string(),
+  whats_different: z.string(),
+  fixes_complaint: z.string(),
   mvp: z.array(z.string()),
   monetization: z.string(),
   main_risk: z.string(),
   search_terms: z.array(z.string()),
 });
 
-/** The idea, from its own call. */
-export const ideaOnlySchema = z.object({ idea: ideaSchema });
+export const buildSchema = z.object({ idea: ideaSchema });
+
+export const kitSchema = z.object({
+  screen: z.object({
+    title: z.string(),
+    greeting: z.string(),
+    hero_label: z.string(),
+    hero_value: z.string(),
+    primary_action: z.string(),
+    cards: z.array(z.object({ title: z.string(), detail: z.string(), tag: z.string() })),
+    tabs: z.array(z.string()),
+  }),
+  plan: z.array(z.object({ when: z.string(), goal: z.string(), done_when: z.string() })),
+});
+
+export const planSchema = z.object({
+  summary: z.string(),
+  customer: z.string(),
+  problem: z.string(),
+  solution: z.string(),
+  revenue: z.object({ model: z.string(), price_to_test: z.string(), why: z.string() }),
+  launch_costs: z.array(z.object({ item: z.string(), estimate: z.string() })),
+  first_100_users: z.array(z.string()),
+  milestones: z.array(z.object({ when: z.string(), goal: z.string() })),
+  risks: z.array(z.object({ risk: z.string(), plan: z.string() })),
+});
 
 const UNSUPPORTED = ['$schema', 'minItems', 'maxItems', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'pattern', 'format'];
 

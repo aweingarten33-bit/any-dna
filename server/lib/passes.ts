@@ -1,24 +1,29 @@
-// The three AI passes. Prompts adapted from the workbench prompts:
-//   rules for every pass  <- Prompt 1 (Research): evidence only, unknown is a valid answer
-//   dissect               <- Prompts 1 + 2 (Research, Extract DNA): why it works, mechanics not features
-//   build (fit + idea)    <- Prompt 3 (Generate): real user, repeatable loop, buildable by one person
+// The AI passes. Prompts adapted from the four workbench prompts:
+//   RULES                <- Prompt 1 (Research): only the supplied data, unknown is a correct answer
+//   dissect              <- Prompts 1 + 2 (Research, Extract DNA): why it works, and the 3-4 tricks
+//                           that would still work somewhere else, at HotelTonight/GasBuddy depth
+//   build                <- Prompt 3 (Generate): private candidates, hard rejections, must-haves;
+//                           plus Prompt 4 (Filter) as a private self-check instead of a verdict
+//   kit, plan            <- new: the phone mockup and build plan, and the business plan
 // Competitors are found in plain code (itunes.ts), not by the AI.
-// Speed: Muse's time tracks how much it writes (about 125 tokens a second), so
-// every field asks for few words.
-// Prompt 3's "never [source] for [X]" rule is left out on purpose: carrying a
-// proven app to a new audience is what Spinoff does. A reskin is still rejected.
+// Everything is written for a normal person: see WRITING.
 import { structuredCall } from './ai.ts';
-import { dissectSchema, fitCheckSchema, gapsModelSchema, ideaOnlySchema } from './schemas.ts';
-import type { AppListing, Dissect, FitCheck, Gaps, Idea, Review } from './types.ts';
+import { buildSchema, dissectSchema, gapsModelSchema, kitSchema, planSchema } from './schemas.ts';
+import type { AppListing, BusinessPlan, CompetitorListing, Dissect, Gaps, Idea, Kit, Review } from './types.ts';
 
-const RULES = `You are one step in Spinoff, a tool that takes an app that already works and adapts it for a new audience.
+const RULES = `You are one step in Spinoff. Spinoff takes an app that already works and turns what makes it work into a new app for a different group of people.
 
 Rules:
-- Use only the data supplied in this message. Never invent facts, apps, prices, URLs, numbers or market claims.
-- Separate what the data shows from your reading of why. A feature existing does not mean it caused success.
-- Unknown is a correct answer. When the data doesn't show something, say "unknown" instead of guessing.
-- Plain English. Short sentences. No jargon, no hype. Every field as short as it can be while staying specific.
-- Never use the word "niche".`;
+- Use only the data supplied in this message. Never invent facts, apps, prices, numbers or market claims.
+- A feature existing doesn't mean it caused the app's success. Separate what the data shows from your reading of why.
+- Unknown is a correct answer. If the data doesn't show something, say so instead of guessing.`;
+
+/** How every pass writes. The readers are normal people, not product managers. */
+const WRITING = `How to write:
+- Write like you're texting a smart friend who has never heard of this. Everyday words, short sentences, under 20 words each.
+- Be concrete. Say who, what they tap, what they see, when. Bad: "Leverages community engagement to drive retention." Good: "Neighbors post what's left on their porch, so you check on your way home."
+- Never use these words: mechanic, loop, lever, leverage, synergy, ecosystem, engagement, monetize, monetization, value proposition, gamify, gamification, frictionless, seamless, empower, unlock, holistic, robust, niche, platform, solution, innovative, utilize, stakeholders.
+- No hype, no exclamation marks, no buzzwords. If a sentence would fit any app, delete it and say something specific.`;
 
 function listingBlock(app: AppListing) {
   return JSON.stringify({
@@ -47,27 +52,36 @@ export function runDissect(app: AppListing, reviews: Review[]): Promise<Dissect>
     effort: 'medium',
     system: `${RULES}
 
-Your job: understand why this app works, not what it is. Isolate the mechanics with the topic stripped away.
+${WRITING}
 
-Depth matters. Bad: "tap to book", "personalization", "great UX", or any feature every competitor has.
-Good examples of the depth wanted:
-- HotelTonight is not "tap to book". Inventory expires at a deadline, so its value drops to zero and incentives change as time runs out.
-- GasBuddy: a constantly changing local condition becomes useful because the crowd keeps it updated.
+Your job: understand why ${app.name} works, not what it is. Then find the tricks inside it that would still work if you moved them somewhere completely different.
+
+A trick is one of:
+- a reason people act differently than they normally would,
+- a way money, value or supply moves that isn't obvious,
+- who takes part, what each side gets, and why it holds together,
+- a limit or rule that creates the magic,
+- a way of reaching people or making things that is itself the new part.
+
+The depth wanted:
+- HotelTonight isn't "book a hotel on your phone". It's "rooms nobody books by tonight are worth nothing tomorrow, so prices drop as the deadline gets close".
+- GasBuddy isn't "find gas prices". It's "prices change all the time, and the crowd keeps them up to date because they want the same info".
+Too shallow: "personalization", "great design", "easy to use", or anything every competing app also has.
 
 Fields:
-- core_loop: the specific actions a user repeats, and what happens because of them.
-- frequency_required: how often a user must come back for the loop to work (daily, weekly, per event...).
-- reward_type: what the user gets each time through the loop.
-- retention_lever: what brings them back.
-- monetization_trigger: the moment and reason a user pays, or how money is made if users don't pay.
-- network_effect: whether and how it gets better as more people use it. "None" is a valid answer.
-- dependencies: conditions the app needs to function (supply, trust, timing, data, partners, a behavior people already have).
-- why_it_works: the structural reason this version works, in two or three sentences.
-- unknowns: what this data can't tell you.
+- what_it_is: one sentence a 12-year-old would understand.
+- what_people_do: what someone actually does in the app, step by step in one or two sentences.
+- why_it_works: two or three sentences on the real reason it works, not the marketing.
+- how_it_makes_money: one or two sentences. If the data doesn't show it, say what's unknown.
+- tricks: 3 or 4, strongest first. Describe each without the app's name, topic or category, so it could be moved anywhere.
+  - name: 2 to 5 plain words, like "Last-minute markdown" or "Crowd keeps it fresh".
+  - how_it_works: one sentence.
+  - needs: one sentence on what has to be true for it to work somewhere else.
+- unknowns: up to 3 things this data can't tell you.
 
-The listing description is the developer's own marketing; treat its claims as claims. The 1 to 3 star reviews show where the mechanics strain.`,
+The listing description is the developer's own marketing, so treat its claims as claims. The 1 to 3 star reviews show where the app strains.`,
     user: `App Store listing:\n${listingBlock(app)}\n\nRecent 1 to 3 star reviews (${reviews.length} total, up to ${DISSECT_REVIEWS} shown):\n${reviewLines(reviews, DISSECT_REVIEWS, false) || '(none fetched)'}`,
-  });
+  }).then((dissect) => ({ ...dissect, tricks: dissect.tricks.slice(0, 4), unknowns: dissect.unknowns.slice(0, 3) }));
 }
 
 // ---- gaps ----------------------------------------------------------------
@@ -81,7 +95,8 @@ export async function runGaps(app: AppListing, reviews: Review[]): Promise<Gaps>
     system: `${RULES}
 
 Your job: find the complaints that repeat across these 1 to 3 star reviews of ${app.name}.
-- Group reviews by the underlying problem, not by wording. Up to 6 themes, the biggest first. Theme names under 10 words.
+- Group reviews by the underlying problem, not by wording. Up to 6 themes, the biggest first.
+- Name each theme the way a frustrated customer would say it, under 10 words. Good: "Lost my streak because the app crashed". Bad: "Reliability issues impacting retention".
 - For each theme list the IDs (like "r12") of every review that makes that complaint. Only cite reviews that actually make it.
 - about: "mechanic" if the complaint is about how the app works (pricing model, ads, reliability, onboarding, notifications, matching...), which would follow the mechanic to any audience. "subject" if it's about the app's own topic or content and wouldn't carry over.
 - Skip one-off complaints. A theme needs at least two reviews.`,
@@ -102,79 +117,133 @@ Your job: find the complaints that repeat across these 1 to 3 star reviews of ${
   return { repeated_complaints: complaints.slice(0, 8) };
 }
 
-// ---- build: fit check and idea as two calls at the same time -------------
-// Muse's time grows with how much it writes, so the fit check and the idea are
-// written by two calls running side by side: each writes about half as much.
-// The idea call is told to make the same survives/adapts/breaks judgment
-// silently, so it still builds on it.
+// ---- build: the idea ----------------------------------------------------
 
-const FIT_RULE = `Judge each mechanic by one question: does this audience already have the behavior it needs, at the frequency it needs?
-- survives: they already do this, often enough. Keep it as is.
-- adapts: the behavior exists but in a different form or rhythm.
-- breaks: they don't do this. Example: a daily streak breaks for people selling a car, because nobody sells a car daily.`;
-
-function buildContext(app: AppListing, dissect: Dissect, carryable: Gaps['repeated_complaints'], audience: string) {
-  return `Audience: ${audience}\n\nSource app: ${app.name} (category: ${app.category})\n\nMechanics:\n${JSON.stringify(dissect, null, 2)}\n\nRepeated complaints about how ${app.name} works (counted from fetched reviews):\n${carryable.length ? carryable.map((complaint) => `- ${complaint.theme} (${complaint.evidence_count} reviews)`).join('\n') : '(none found)'}`;
-}
-
-export async function runBuild(app: AppListing, dissect: Dissect, gaps: Gaps, audience: string): Promise<{ fit_check: FitCheck; idea: Idea }> {
+export async function runBuild(app: AppListing, dissect: Dissect, gaps: Gaps, audience: string): Promise<{ idea: Idea }> {
   const carryable = gaps.repeated_complaints.filter((complaint) => complaint.about === 'mechanic');
-  const user = buildContext(app, dissect, carryable, audience);
-  const [fit, made] = await Promise.all([
-    structuredCall({
-      schema: fitCheckSchema,
-      effort: 'low',
-      system: `${RULES}
+  const { idea } = await structuredCall({
+    schema: buildSchema,
+    effort: 'medium',
+    system: `${RULES}
 
-You check which proven mechanics of ${app.name} carry over to a new audience: ${audience}.
-${FIT_RULE}
-One row each for core_loop, frequency_required, reward_type, retention_lever, monetization_trigger and network_effect, then one row for each of the two most important dependencies. Use those plain names as "component".
-- audience_behavior: what this audience actually does today that is relevant, concretely. One sentence.
-- reason: one short sentence.
-- replacement: for "adapts", the adapted version. For "breaks", a replacement built on a behavior this audience does have. For "survives", an empty string. One sentence.
-This is your judgment, not fetched data, so don't present it as fact or cite numbers.`,
-      user,
-    }),
-    structuredCall({
-      schema: ideaOnlySchema,
-      effort: 'low',
-      system: `${RULES}
+${WRITING}
 
-You design one new app for ${audience}, built from the proven mechanics of ${app.name}.
-First, silently, judge each mechanic:
-${FIT_RULE}
-Then design the app: keep what survives, adapt what adapts, and replace what breaks with something built on a behavior this audience does have.
-- Make it different using the incumbent's repeated complaints listed below: design the new app so that complaint can't happen. Only use complaints about how the app works; they are the ones that would follow the mechanic. If none are listed, say there's no review evidence to differentiate on.
-The idea must have:
-- A real person in this audience with a real, recurring problem.
-- What the user does inside the app, and what the app does in response.
-- A repeatable core loop that fits how often this audience actually acts.
-- A first version one person could build.
-- Consumer-first: one person can adopt it without an employer, admin or procurement.
-- A normal person would understand it in five seconds and want to show it to someone.
-Reject before answering: a generic AI assistant, chatbot, dashboard, habit tracker, CRM or checklist; anything vague that can't be described as a specific app; and a reskin. If the only thing that changed from ${app.name} is the topic, you haven't finished: what broke must change how the product works.
-Idea fields:
-- name: a short product name.
-- pitch: one sentence, under 20 words.
-- core_loop: how the loop works for this audience. One or two sentences.
-- what_broke_and_replaced: what didn't survive and what took its place. One or two sentences.
-- first_session_flow: 3 to 5 steps, what a new user does in their first session. A few words each.
-- differentiator_from_gaps: the complaint it designs out (name the theme and its review count) and how. One or two sentences.
-- mvp: 3 to 5 features, the smallest version that tests the core loop. A few words each.
-- monetization: how it would make money, in one or two sentences. Don't state prices: you have no price data.
-- main_risk: the single most likely reason it fails, in one sentence.
+You design one new app for ${audience}, built on the tricks that make ${app.name} work.
+
+Before writing anything, privately:
+1. Write down the obvious answer: "${app.name}, but for ${audience}". Throw it away. Only changing the topic is a reskin, not a new app.
+2. For each trick, ask: where in the lives of ${audience} is the same thing already true? Think of at least 3 different situations.
+3. Sketch at least 3 different apps. Keep the best one.
+4. Check it like a blunt stranger who has never heard of ${app.name}:
+   - After one read, do I know what it is and who it's for?
+   - If I were one of ${audience}, would I actually use it? Would I pay?
+   - Take the borrowed trick out. Does the app still work the same? Then the trick is decoration: start over.
+   - Is there a made-up rule or theme that doesn't help the person? Remove it.
+   If it fails any of these, fix it before answering.
+
+Throw away, always:
+- a generic AI assistant, chatbot, dashboard, habit tracker, CRM or checklist,
+- anything vague that can't be described as a specific app,
+- anything that needs an employer, a school or an admin to set it up. One person must be able to download it and start.
+
+Use the complaints about ${app.name} listed below: design the new app so that complaint can't happen. If none are listed, say there's no review evidence to build on.
+
+The app must have: a real person with a real problem that keeps coming back, something they do in the app, something the app does in response, a reason to come back as often as this problem actually happens, and a first version one person could build.
+
+Fields:
+- name: a short, memorable product name. Not a pun on ${app.name}.
+- pitch: one sentence, under 15 words. What it does for whom. A friend should get it instantly.
+- who_its_for: one specific person and their problem, in one or two sentences. Like: "A dad who walks the dog at 6am and can never tell if his kids already did."
+- how_it_works: 3 or 4 steps. Each step starts with "You" (what the person does) or "The app" (what it does back).
+- borrowed_trick: which trick it takes from ${app.name} and how it shows up here, one or two sentences. Name ${app.name}.
+- whats_different: how it differs from ${app.name} beyond the audience, one or two sentences.
+- fixes_complaint: the complaint it designs out (name it and its review count) and how, one or two sentences.
+- mvp: 3 to 5 features for the first version, a few words each.
+- monetization: how it makes money, one or two sentences. Don't state market prices: you have no price data.
+- main_risk: the most likely reason it fails, one sentence.
 - search_terms: 3 or 4 short phrases someone in this audience would type into the App Store to find an app that does this job. Not the product name.`,
-      user,
-    }),
-  ]);
-  const result = { components: fit.components, idea: made.idea };
+    user: `Audience: ${audience}\n\nSource app: ${app.name} (category: ${app.category})\n\nWhat we know about ${app.name}:\n${JSON.stringify(dissect, null, 2)}\n\nComplaints about how ${app.name} works (counted from fetched reviews):\n${carryable.length ? carryable.map((complaint) => `- ${complaint.theme} (${complaint.evidence_count} reviews)`).join('\n') : '(none found)'}`,
+  });
   return {
-    fit_check: { components: result.components.slice(0, 10).map((row) => ({ ...row, replacement: row.status === 'survives' ? '' : row.replacement })) },
     idea: {
-      ...result.idea,
-      first_session_flow: result.idea.first_session_flow.slice(0, 6),
-      mvp: result.idea.mvp.map((item) => item.trim()).filter(Boolean).slice(0, 5),
-      search_terms: result.idea.search_terms.map((term) => term.trim()).filter(Boolean).slice(0, 4),
+      ...idea,
+      how_it_works: idea.how_it_works.map((step) => step.trim()).filter(Boolean).slice(0, 5),
+      mvp: idea.mvp.map((item) => item.trim()).filter(Boolean).slice(0, 5),
+      search_terms: idea.search_terms.map((term) => term.trim()).filter(Boolean).slice(0, 4),
     },
   };
+}
+
+function ideaBlock(idea: Idea, audience: string) {
+  return `Audience: ${audience}\n\nThe app:\n${JSON.stringify({ name: idea.name, pitch: idea.pitch, who_its_for: idea.who_its_for, how_it_works: idea.how_it_works, mvp: idea.mvp, monetization: idea.monetization, main_risk: idea.main_risk }, null, 2)}`;
+}
+
+// ---- kit: what the main screen shows, and a build plan ------------------
+
+export async function runKit(idea: Idea, audience: string): Promise<Kit> {
+  const kit = await structuredCall({
+    schema: kitSchema,
+    effort: 'low',
+    system: `${RULES}
+
+${WRITING}
+
+You write the content of the main screen of a new phone app, as it would look on a normal day for one person using it, plus a short plan to build its first version.
+
+screen (this fills a designed phone mockup, so keep every piece short and real, never placeholder text like "Item 1"):
+- title: the app name or the screen name, 1 to 3 words.
+- greeting: a short line at the top, like "Morning, Sam" or "3 walks this week". Under 5 words.
+- hero_label: a small label for the main number or status, 1 to 4 words, like "Next pickup".
+- hero_value: the main number or status itself, 1 to 4 words, like "6:30 pm" or "2 left".
+- primary_action: the main button, 1 to 3 words, starting with a verb, like "Log a walk".
+- cards: exactly 3 realistic items someone would see on this screen. title 2 to 5 words, detail under 8 words, tag 1 or 2 words (a status, time or price).
+- tabs: exactly 4 tab names for the bottom bar, 1 word each, the first being this screen.
+
+plan: 4 steps to build and test the first version, for one person using an AI app builder.
+- when: like "Week 1".
+- goal: what to build or do, one sentence.
+- done_when: how you know it's done, one sentence. Make it testable, like "5 people logged a walk 3 days in a row".`,
+    user: ideaBlock(idea, audience),
+  });
+  return {
+    screen: { ...kit.screen, cards: kit.screen.cards.slice(0, 3), tabs: kit.screen.tabs.slice(0, 4) },
+    plan: kit.plan.slice(0, 5),
+  };
+}
+
+// ---- plan: the business plan, made on request ----------------------------
+
+export function runPlan(idea: Idea, audience: string, competitors: CompetitorListing[]): Promise<BusinessPlan> {
+  const listed = competitors.slice(0, 8).map((app) => ({ name: app.name, upfront_price: app.formatted_price || 'unknown', rating: app.rating, rating_count: app.rating_count }));
+  return structuredCall({
+    schema: planSchema,
+    effort: 'low',
+    system: `${RULES}
+
+${WRITING}
+
+You write a one-page business plan for a new app, for the person who will build it alone. Practical, not a pitch deck.
+
+The only market data you have is the competitor list: their upfront App Store prices and ratings. Apple doesn't publish in-app or subscription prices, so those are unknown. Anything else is your suggestion, not a fact: write it as a suggestion ("Try...", "Expect about...").
+
+Fields:
+- summary: what the business is, in two sentences.
+- customer: who pays, specifically. One or two sentences.
+- problem: what's broken today for them. One or two sentences.
+- solution: what the app does about it. One or two sentences.
+- revenue.model: how money comes in. One sentence.
+- revenue.price_to_test: a price to try first, like "$4.99 a month". A suggestion, not data.
+- revenue.why: why that price, in one sentence. You may compare to a listed competitor's upfront price, naming it.
+- launch_costs: 3 to 5 rough costs to launch the first version, like "AI app builder plan" with an estimate like "about $25 a month". Rough estimates only.
+- first_100_users: 3 to 5 specific places or ways to find the first 100 people. Name real kinds of places (a subreddit type, a local group, an event), not "social media".
+- milestones: 4 steps over the first 90 days. when like "Day 30", goal one sentence.
+- risks: the 3 biggest risks, each with a plan, one sentence each.`,
+    user: `${ideaBlock(idea, audience)}\n\nApps on the App Store doing a similar job (fetched):\n${listed.length ? JSON.stringify(listed, null, 2) : '(none found)'}`,
+  }).then((plan) => ({
+    ...plan,
+    launch_costs: plan.launch_costs.slice(0, 5),
+    first_100_users: plan.first_100_users.slice(0, 5),
+    milestones: plan.milestones.slice(0, 5),
+    risks: plan.risks.slice(0, 3),
+  }));
 }

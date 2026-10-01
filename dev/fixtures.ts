@@ -47,15 +47,16 @@ function reviewFeed() {
 // deno-lint-ignore no-explicit-any
 const PARTS: Record<string, any> = {
   dissect: {
-    core_loop: 'Do one small action once a day, check in, and watch an unbroken count grow.',
-    frequency_required: 'Daily. The loop breaks if a day is missed.',
-    reward_type: 'A growing number that represents accumulated effort, plus rank among friends.',
-    retention_lever: 'Fear of losing the count; the longer it gets, the more it costs to walk away.',
-    monetization_trigger: 'Paying to protect the count when life gets in the way (streak freezes).',
-    network_effect: 'Weak. Friends on a weekly leaderboard add some pull.',
-    dependencies: ['A behavior people can do every day', 'A reliable daily clock and sync'],
-    why_it_works: 'Loss aversion grows with the streak, so the habit gets stickier the longer it runs. Money is made at the moment that loss feels biggest.',
-    unknowns: ['How many paying users there are', 'Whether the leaderboard drives retention'],
+    what_it_is: 'An app that counts how many days in a row you did one small thing.',
+    what_people_do: 'You do one small task, tap to check in, and watch the number of days grow.',
+    why_it_works: 'The longer the count gets, the worse it feels to lose it, so people keep going. It charges money right when losing the count would hurt most.',
+    how_it_makes_money: 'People pay for "freezes" that protect the count on days they miss.',
+    tricks: [
+      { name: 'Too much to lose', how_it_works: 'A number grows every day you show up, and missing one day resets it.', needs: 'Something people can do every single day.' },
+      { name: 'Pay when it hurts', how_it_works: 'You can pay to protect your count right when you are about to lose it.', needs: 'A moment where losing progress feels bad.' },
+      { name: 'Friends keep score', how_it_works: 'A weekly board shows friends next to you.', needs: 'People who know each other doing the same thing.' },
+    ],
+    unknowns: ['How many people pay', 'Whether the friends board keeps people around'],
   },
   gaps: {
     themes: [
@@ -65,27 +66,46 @@ const PARTS: Record<string, any> = {
       { theme: 'Fake check-ins on the leaderboard', review_ids: ['r8'], about: 'subject' },
     ],
   },
-  fit_check: {
-    components: [
-      { component: 'core_loop', status: 'survives', audience_behavior: 'Dog owners walk their dog every day, usually twice.', reason: 'The daily action already exists and does not need to be invented.', replacement: '' },
-      { component: 'frequency_required', status: 'survives', audience_behavior: 'Walks happen daily without prompting.', reason: 'The dog sets the rhythm.', replacement: '' },
-      { component: 'reward_type', status: 'adapts', audience_behavior: 'Owners care about the dog\'s health more than their own score.', reason: 'A personal count matters less than the dog\'s routine.', replacement: 'The streak belongs to the dog, shown as the dog\'s walk record.' },
-      { component: 'retention_lever', status: 'adapts', audience_behavior: 'Owners already feel responsible for the walk.', reason: 'Guilt is already present; nagging adds nothing.', replacement: 'A shared household record so whoever walked gets credit.' },
-      { component: 'monetization_trigger', status: 'breaks', audience_behavior: 'Owners pay for things that help the dog, not to protect a number.', reason: 'Paying to save a streak feels wrong when the dog was walked anyway.', replacement: 'Paid vet-ready activity reports.' },
-      { component: 'network_effect', status: 'adapts', audience_behavior: 'Owners share walking duty with family and dog walkers.', reason: 'The network is the household, not strangers.', replacement: 'Household members join one dog\'s record.' },
-    ],
-  },
   mutate: {
     name: 'Walkies',
-    pitch: 'One shared walk record for your dog, so the whole household knows it\'s been walked.',
-    core_loop: 'Whoever walks the dog taps once; everyone in the household sees it, and the dog\'s record grows.',
-    what_broke_and_replaced: 'Paying to protect a streak broke. It\'s replaced by paid vet-ready activity reports.',
-    first_session_flow: ['Add your dog', 'Invite your household', 'Log today\'s walk with one tap', 'See the dog\'s week'],
-    differentiator_from_gaps: 'Designs out "streaks lost to sync bugs" (3 reviews): walks are logged with a time and can be added late, so a missed sync never erases history.',
+    pitch: 'One shared walk record for your dog, so everyone at home knows it was walked.',
+    who_its_for: 'A dad who walks the dog at 6am and can never tell if his kids already did.',
+    how_it_works: ['You tap once when you get back from a walk.', 'The app tells everyone at home the dog was walked, and by whom.', 'You see the dog\'s week at a glance.'],
+    borrowed_trick: 'Like Streakly\'s growing count, the dog\'s walk record grows each day, but it belongs to the dog, not you.',
+    whats_different: 'It\'s shared by a household, and nobody pays to protect a number.',
+    fixes_complaint: 'Designs out "Lost my streak because the app crashed" (3 reviews): walks can be added late, so a crash never erases a day.',
     mvp: ['Dog profile', 'One-tap walk log', 'Household invite', 'Weekly walk view', 'Late entry for missed logs', 'Extra item that must be cut'],
     monetization: 'Free to log. A paid vet-ready activity report.',
-    main_risk: 'Households may not bother logging once the novelty wears off.',
+    main_risk: 'Households may stop logging once the novelty wears off.',
     search_terms: ['dog walk tracker', 'dog walking log', 'pet activity'],
+  },
+  kit: {
+    screen: {
+      title: 'Walkies', greeting: 'Morning, Sam', hero_label: 'Last walk', hero_value: '7:10 am', primary_action: 'Log a walk',
+      cards: [
+        { title: 'Mia walked Biscuit', detail: '25 minutes around the park', tag: '7:10 am' },
+        { title: 'Evening walk due', detail: 'Nobody has claimed it yet', tag: 'Tonight' },
+        { title: 'Biscuit\'s week', detail: '12 walks, 2 missed', tag: 'On track' },
+      ],
+      tabs: ['Today', 'Week', 'Family', 'Profile'],
+    },
+    plan: [
+      { when: 'Week 1', goal: 'Build the dog profile and one-tap walk log.', done_when: 'You can log a walk in under 3 seconds.' },
+      { when: 'Week 2', goal: 'Add household invites and shared history.', done_when: 'Two people see the same walks.' },
+      { when: 'Week 3', goal: 'Give it to 5 households.', done_when: '3 of them log a walk on 5 days.' },
+      { when: 'Week 4', goal: 'Fix what they hit and test the paid report.', done_when: 'One household says they would pay.' },
+    ],
+  },
+  plan: {
+    summary: 'Walkies is a shared walk log for households with a dog. It makes money from paid vet-ready reports.',
+    customer: 'Families of 3 or more who share one dog.',
+    problem: 'Nobody knows if the dog was walked, so it gets walked twice or not at all.',
+    solution: 'One tap logs a walk and tells everyone at home.',
+    revenue: { model: 'Free app with a paid monthly report.', price_to_test: '$2.99 a month', why: 'PawWalk Log (demo) is free, so the paid part must be extra.' },
+    launch_costs: [{ item: 'AI app builder plan', estimate: 'about $25 a month' }, { item: 'Apple developer account', estimate: '$99 a year' }],
+    first_100_users: ['Local dog park groups', 'Dog subreddits', 'Puppy training classes'],
+    milestones: [{ when: 'Day 30', goal: 'First version live.' }, { when: 'Day 60', goal: '50 households.' }, { when: 'Day 90', goal: '100 households, 5 paying.' }],
+    risks: [{ risk: 'People stop logging.', plan: 'A gentle evening reminder only when nobody logged.' }],
   },
 };
 
@@ -94,14 +114,16 @@ export const PASS_FIXTURES: Record<string, any> = {
   dissect: PARTS.dissect,
   gaps: PARTS.gaps,
   build: { idea: PARTS.mutate },
-  fit: { components: PARTS.fit_check.components },
+  kit: PARTS.kit,
+  plan: PARTS.plan,
 };
 
 function whichPass(system: string) {
-  if (system.includes('understand why this app works')) return 'dissect';
+  if (system.includes('find the tricks inside it')) return 'dissect';
   if (system.includes('find the complaints that repeat')) return 'gaps';
-  if (system.includes('You check which proven mechanics')) return 'fit';
   if (system.includes('You design one new app')) return 'build';
+  if (system.includes('content of the main screen')) return 'kit';
+  if (system.includes('one-page business plan')) return 'plan';
   throw new Error('Unknown pass prompt');
 }
 

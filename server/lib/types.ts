@@ -40,15 +40,14 @@ export type ReviewsSummary = {
 
 // ---- Pass outputs -------------------------------------------------------
 
+/** Why the source app works, in plain words (workbench Prompts 1 and 2). */
 export type Dissect = {
-  core_loop: string;
-  frequency_required: string;
-  reward_type: string;
-  retention_lever: string;
-  monetization_trigger: string;
-  network_effect: string;
-  dependencies: string[];
+  what_it_is: string;
+  what_people_do: string;
   why_it_works: string;
+  how_it_makes_money: string;
+  /** The 3 or 4 ideas inside the app that would still work somewhere else, strongest first. */
+  tricks: Array<{ name: string; how_it_works: string; needs: string }>;
   unknowns: string[];
 };
 
@@ -64,28 +63,46 @@ export type Complaint = {
 
 export type Gaps = { repeated_complaints: Complaint[] };
 
-export type FitComponent = {
-  component: string;
-  status: 'survives' | 'adapts' | 'breaks';
-  audience_behavior: string;
-  reason: string;
-  replacement: string;
-};
-
-export type FitCheck = { components: FitComponent[] };
-
 export type Idea = {
   name: string;
   pitch: string;
-  core_loop: string;
-  what_broke_and_replaced: string;
-  first_session_flow: string[];
-  differentiator_from_gaps: string;
-  /** The smallest version that tests the core loop, at most 5 features. */
+  who_its_for: string;
+  /** What you do and what the app does back, step by step. */
+  how_it_works: string[];
+  /** The trick it borrows from the source app, in plain words. */
+  borrowed_trick: string;
+  whats_different: string;
+  fixes_complaint: string;
   mvp: string[];
   monetization: string;
   main_risk: string;
   search_terms: string[];
+};
+
+/** Content for the phone mockup and the build plan. Written after the run, in the background. */
+export type Kit = {
+  screen: {
+    title: string;
+    greeting: string;
+    hero_label: string;
+    hero_value: string;
+    primary_action: string;
+    cards: Array<{ title: string; detail: string; tag: string }>;
+    tabs: string[];
+  };
+  plan: Array<{ when: string; goal: string; done_when: string }>;
+};
+
+export type BusinessPlan = {
+  summary: string;
+  customer: string;
+  problem: string;
+  solution: string;
+  revenue: { model: string; price_to_test: string; why: string };
+  launch_costs: Array<{ item: string; estimate: string }>;
+  first_100_users: string[];
+  milestones: Array<{ when: string; goal: string }>;
+  risks: Array<{ risk: string; plan: string }>;
 };
 
 /** An app found by searching the App Store for the new idea. Every field is fetched data. */
@@ -100,33 +117,35 @@ export type Competitor = CompetitorListing & {
   overlap: string;
 };
 
-/** Saved ideas from before the competitor check was plain code still carry this. */
-export type LegacyVerdict = { competitors: Competitor[]; mvp: string[]; monetization: string; main_risk: string };
-
-export type PassName = 'dissect' | 'gaps' | 'build' | 'compete';
+export type PassName = 'dissect' | 'gaps' | 'build' | 'compete' | 'kit' | 'plan';
 
 export type PassOutputs = {
   dissect: Dissect;
   gaps: Gaps;
-  build: { fit_check: FitCheck; idea: Idea };
+  build: { idea: Idea };
   compete: { competitors: Competitor[]; searched: CompetitorListing[] };
+  kit: Kit;
+  plan: BusinessPlan;
 };
 
 /** Everything one run produces. Saved on the device as ideas.output_json. */
 export type Blueprint = {
+  /** 2 since the plain-language rewrite. Older saves have no version and a different shape. */
+  version: 2;
   app: AppListing;
   audience: string;
   reviews: ReviewsSummary;
   dissect: Dissect;
   gaps: Gaps;
-  fit_check: FitCheck;
   idea: Idea;
   /** Every App Store search result for the idea's search terms. */
   searched: CompetitorListing[];
   /** The closest of those: the apps that came up for the most searches, then the highest ranked. */
   competitors: Competitor[];
-  /** Only on ideas saved before the change. */
-  verdict?: LegacyVerdict;
+  /** Filled in after the run. */
+  kit?: Kit;
+  /** Made when the person asks for it. */
+  plan?: BusinessPlan;
 };
 
 export type SavedIdea = {

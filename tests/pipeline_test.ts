@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertMatch } from 'jsr:@std/assert@^1';
 import { forgetJobs, getReviews, resolveApp, runPass } from '../server/lib/handlers.ts';
 import { parseAppInput } from '../server/lib/itunes.ts';
-import type { Competitor, FitCheck, Gaps, Idea } from '../server/lib/types.ts';
+import type { BusinessPlan, Competitor, Gaps, Idea, Kit } from '../server/lib/types.ts';
 import { installFixtures, PASS_FIXTURES, SOURCE_ID } from '../dev/fixtures.ts';
 import { takeAiCall } from '../server/main.ts';
 
@@ -49,10 +49,10 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
     // Examples are verbatim review text.
     assertMatch(gaps.repeated_complaints[0].example, /200 day streak|time zone|crashed/);
 
-    // One call returns the fit check and the idea; dissect and gaps come from the cache.
-    const built = (await call(runPass, { pass: 'build', app_id: SOURCE_ID, audience: 'Dog owners' })).body.output as { fit_check: FitCheck; idea: Idea };
-    assertEquals(built.fit_check.components.find((c) => c.status === 'survives')?.replacement, '');
+    // One call returns the idea; dissect and gaps come from the cache.
+    const built = (await call(runPass, { pass: 'build', app_id: SOURCE_ID, audience: 'Dog owners' })).body.output as { idea: Idea };
     const idea = built.idea;
+    assertEquals(idea.how_it_works.length, 3);
     assertEquals(idea.name, 'Walkies');
     assertEquals(fixtures.attempts.get('dissect'), 1);
     assertEquals(fixtures.attempts.get('gaps'), 1);
@@ -76,7 +76,16 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
     assertEquals(fixtures.attempts.get('dissect'), 1);
 
     // Every AI call went to Muse, standard tier, not stored, with the schema in the instructions.
-    assertEquals(fixtures.aiRequests.length, 4); // dissect, gaps, and build's fit check and idea, side by side
+    assertEquals(fixtures.aiRequests.length, 3); // dissect, gaps, build
+
+    // After the run: the mockup and build plan, and the business plan on request.
+    const kit = (await call(runPass, { pass: 'kit', app_id: SOURCE_ID, audience: 'Dog owners', idea })).body.output as Kit;
+    assertEquals(kit.screen.cards.length, 3);
+    assertEquals(kit.screen.tabs.length, 4);
+    const plan = (await call(runPass, { pass: 'plan', app_id: SOURCE_ID, audience: 'Dog owners', idea })).body.output as BusinessPlan;
+    assertEquals(plan.revenue.price_to_test, '$2.99 a month');
+    // The plan prompt gets competitor prices from a fresh App Store search, not from the request.
+    assertMatch(String(fixtures.aiRequests.at(-1)!.body.input), /PawWalk Log \(demo\)/);
     for (const { provider, body } of fixtures.aiRequests) {
       assertEquals(provider, 'muse');
       assertEquals(body.model, 'muse-spark-1.3');

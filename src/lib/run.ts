@@ -56,10 +56,8 @@ export function useRun(app: AppListing, audience: string, onDone: (blueprint: Bl
         out.gaps ??= (await api.gaps(app, signal)).output;
       },
       build: async () => {
-        if (out.fit_check && out.idea) return;
-        const { output } = await api.build(app, audience, signal);
-        out.fit_check = output.fit_check;
-        out.idea = output.idea;
+        if (out.idea) return;
+        out.idea = (await api.build(app, audience, signal)).output.idea;
       },
       compete: async () => {
         if (out.competitors) return;
@@ -89,8 +87,8 @@ export function useRun(app: AppListing, audience: string, onDone: (blueprint: Bl
       if (firstError) { setError(firstError); return; }
     }
     onDoneRef.current({
-      app, audience,
-      reviews: out.reviews!, dissect: out.dissect!, gaps: out.gaps!, fit_check: out.fit_check!,
+      version: 2, app, audience,
+      reviews: out.reviews!, dissect: out.dissect!, gaps: out.gaps!,
       idea: out.idea!, searched: out.searched ?? [], competitors: out.competitors ?? [],
     });
   }, [app, audience]);

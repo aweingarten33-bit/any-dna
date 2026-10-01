@@ -6,6 +6,8 @@ import type { Blueprint, SavedIdea } from '../../server/lib/types.ts';
 export type IdeaStore = {
   list(): SavedIdea[];
   save(blueprint: Blueprint): SavedIdea;
+  /** Replaces a saved idea's blueprint (when the mockup or business plan arrives). */
+  update(id: string, blueprint: Blueprint): SavedIdea | null;
   remove(id: string): void;
   subscribe(listener: () => void): () => void;
 };
@@ -42,6 +44,13 @@ function createLocalStore(): IdeaStore {
       };
       write([idea, ...cache]);
       return idea;
+    },
+    update(id, blueprint) {
+      const found = cache.find((item) => item.id === id);
+      if (!found) return null;
+      const next = { ...found, output_json: blueprint };
+      write(cache.map((item) => (item.id === id ? next : item)));
+      return next;
     },
     remove(id) { write(cache.filter((item) => item.id !== id)); },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
