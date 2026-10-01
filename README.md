@@ -33,6 +33,7 @@ Real data: competitors, prices and ratings come from Apple's App Store search; s
 - `src/`: the web app (Vite, React, TypeScript, Tailwind).
 - `server/main.ts`: a Deno server for the API (`/api/flow-pass`) and the built site.
 - `server/lib/passes.ts`: the prompts. `handlers.ts`: the steps, upload checks, and jobs. `templates.ts`: the templates.
+- Speed: research and DNA are saved on the device per source, so changing the audience, mode, template or direction only reruns Generate and Filter. The filter's App Store search is reused when an idea is opened.
 - Each AI step runs as a server job. A request waits up to 20 seconds and then answers "pending"; the browser checks in again (sending only the upload's fingerprint, not the file) and joins the same job.
 
 ### AI provider

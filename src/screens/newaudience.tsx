@@ -6,8 +6,19 @@ import { api } from '@/lib/api';
 import { uploadLabel } from '@/lib/upload';
 import type { Upload } from '../../server/lib/types.ts';
 
+/** Suggestions already made for an upload, so coming back to this screen doesn't ask the AI again. */
+const suggested = new Map<string, string[]>();
+
+/** Names an upload cheaply. Screens restored by the back button carry a copy of it, not the same object. */
+function uploadKey(upload: Upload) {
+  if (upload.kind === 'text') return `text:${upload.text}`;
+  if (upload.kind === 'link') return `link:${upload.url}`;
+  const bytes = upload.kind === 'video' ? upload.frames.join('|') : upload.dataUrl;
+  return `${upload.kind}:${upload.filename}:${bytes.length}:${bytes.slice(-64)}`;
+}
+
 export function NewAudience({ upload, initial, initialDirection, onPick }: { upload: Upload; initial?: string; initialDirection?: string; onPick: (audience: string, direction: string) => void }) {
-  const [audiences, setAudiences] = useState<string[] | null>(null);
+  const [audiences, setAudiences] = useState<string[] | null>(suggested.get(uploadKey(upload)) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(initial ?? null);
   const [custom, setCustom] = useState('');
@@ -15,11 +26,13 @@ export function NewAudience({ upload, initial, initialDirection, onPick }: { upl
   const audience = (picked ?? custom).trim();
 
   useEffect(() => {
+    const known = suggested.get(uploadKey(upload));
+    if (known) { setAudiences(known); return; }
     const abort = new AbortController();
     setAudiences(null);
     setError(null);
     api.suggest(upload, abort.signal).then(
-      ({ output }) => { if (!abort.signal.aborted) setAudiences(output.audiences); },
+      ({ output }) => { suggested.set(uploadKey(upload), output.audiences); if (!abort.signal.aborted) setAudiences(output.audiences); },
       (caught) => { if (!abort.signal.aborted) setError(caught instanceof Error ? caught.message : String(caught)); },
     );
     return () => abort.abort();
@@ -29,7 +42,7 @@ export function NewAudience({ upload, initial, initialDirection, onPick }: { upl
     const abort = new AbortController();
     setError(null);
     api.suggest(upload, abort.signal).then(
-      ({ output }) => { if (!abort.signal.aborted) setAudiences(output.audiences); },
+      ({ output }) => { suggested.set(uploadKey(upload), output.audiences); if (!abort.signal.aborted) setAudiences(output.audiences); },
       (caught) => { if (!abort.signal.aborted) setError(caught instanceof Error ? caught.message : String(caught)); },
     );
   }

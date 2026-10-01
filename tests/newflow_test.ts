@@ -84,6 +84,9 @@ Deno.test('new flow: upload → audiences → research → DNA → 3 ideas → s
     const result = filter.body.output as FilterResult;
     assertEquals(result.kept.map((idea) => idea.name), ['Glowstick', 'Crowdlight']);
     assertEquals(result.rejected, [{ name: 'Huddle', reason: 'Already exists.' }]);
+    // The filter's App Store search comes back with each kept idea, so opening one needs no second search.
+    assertEquals(result.found?.length, 2);
+    assert(result.found![0].competitors.length > 0 && result.found![0].searched.length > 0);
     assert(sys(findCall(fixtures, 'CANONICAL PROMPT 4 — FILTER')).includes(PROMPT_4_FILTER));
 
     // Competitors come from a real App Store search, no AI.

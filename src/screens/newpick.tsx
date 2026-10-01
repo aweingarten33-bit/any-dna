@@ -1,12 +1,14 @@
-// The ideas that passed the stranger test. Pick one to open its blueprint;
-// competitors are looked up on the App Store as soon as you pick (no AI).
+// The ideas that passed the stranger test. Pick one to open its blueprint.
+// Its App Store competitors were already searched for the filter, so opening
+// is instant; the search only runs again if those results are missing.
 import { useState, type CSSProperties } from 'react';
 import { Screen } from '@/components/bits';
 import { api } from '@/lib/api';
 import type { Competitor, CompetitorListing, GeneratedIdea } from '../../server/lib/types.ts';
 
-export function NewPick({ ideas, audience, onChoose }: {
+export function NewPick({ ideas, found, audience, onChoose }: {
   ideas: GeneratedIdea[];
+  found?: Array<{ competitors: Competitor[]; searched: CompetitorListing[] }>;
   audience: string;
   onChoose: (idea: GeneratedIdea, found: { competitors: Competitor[]; searched: CompetitorListing[] }) => void;
 }) {
@@ -18,7 +20,8 @@ export function NewPick({ ideas, audience, onChoose }: {
     setBusy(idea.name);
     setError(null);
     try {
-      onChoose(idea, await api.compete(audience, idea));
+      const known = found?.[ideas.indexOf(idea)];
+      onChoose(idea, known?.searched.length ? known : await api.compete(audience, idea));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
       setBusy(null);

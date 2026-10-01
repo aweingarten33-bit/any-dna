@@ -13,6 +13,7 @@ import { audienceSuggestSchema, dnaSchema, filterSchema, inventSchema, kitSchema
 import type { BusinessPlan, CompetitorListing, DnaMechanism, FilterResult, GeneratedIdea, GenerateMode, Kit, SourceResearch } from './types.ts';
 import type { UserContent } from './ai.ts';
 import { templateById, type PhoneLayout } from './templates.ts';
+import { closestCompetitors } from './itunes.ts';
 import {
   MODE_INSTRUCTIONS, OUTER_WRAPPER, PROMPT_1_RESEARCH, PROMPT_2_EXTRACT_DNA, PROMPT_3_GENERATE, PROMPT_3_RETURN, PROMPT_4_FILTER,
   SIDE_RULE_CALLBACKS, SIDE_RULE_COMPETITORS, SIDE_RULE_NAMING, SIDE_RULE_WRITING, SIDE_RULES_INTRO,
@@ -363,8 +364,10 @@ export async function runFilter(ideas: GeneratedIdea[], found: CompetitorListing
   const scored = verdicts.filter((verdict) => verdict.index >= 0 && verdict.index < ideas.length);
   console.log(`[filter] kept ${scored.filter((v) => v.keep).length} of ${ideas.length}: ${scored.map((v) => `#${v.index} ${v.keep ? 'keep' : 'reject'} ${v.desirability} (${v.reason})`).join(' | ')}`);
   const judged = new Set(scored.map((verdict) => verdict.index));
+  const keep = scored.filter((verdict) => verdict.keep).sort((a, b) => b.desirability - a.desirability);
   return {
-    kept: scored.filter((verdict) => verdict.keep).sort((a, b) => b.desirability - a.desirability).map((verdict) => ideas[verdict.index]),
+    kept: keep.map((verdict) => ideas[verdict.index]),
+    found: keep.map((verdict) => ({ competitors: closestCompetitors(found[verdict.index] ?? []), searched: found[verdict.index] ?? [] })),
     rejected: [
       ...scored.filter((verdict) => !verdict.keep).map((verdict) => ({ name: ideas[verdict.index].name, reason: verdict.reason })),
       // An idea the filter skipped hasn't passed.

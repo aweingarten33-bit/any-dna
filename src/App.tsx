@@ -14,7 +14,7 @@ import { NewResult } from '@/screens/newresult';
 import { NewPick } from '@/screens/newpick';
 import { Saved } from '@/screens/saved';
 import { Screen } from '@/components/bits';
-import { isNewBlueprint, type GeneratedIdea, type NewBlueprint, type SavedIdea, type Upload, type UploadRead } from '../server/lib/types.ts';
+import { isNewBlueprint, type FilterResult, type GeneratedIdea, type NewBlueprint, type SavedIdea, type Upload, type UploadRead } from '../server/lib/types.ts';
 import { uploadLabel } from '@/lib/upload';
 
 type Steer = { templateId: string | null; mode: Mode; second: Upload | null };
@@ -24,7 +24,7 @@ type ScreenState =
   | { name: 'audience'; upload: Upload; audience?: string; direction?: string; steer?: Steer }
   | { name: 'steer'; upload: Upload; audience: string; direction: string; steer?: Steer }
   | { name: 'loading'; upload: Upload; audience: string; direction: string; steer: Steer }
-  | { name: 'pick'; upload: Upload; audience: string; direction: string; steer: Steer; read: UploadRead; secondRead?: UploadRead; kept: GeneratedIdea[] }
+  | { name: 'pick'; upload: Upload; audience: string; direction: string; steer: Steer; read: UploadRead; secondRead?: UploadRead; kept: GeneratedIdea[]; found?: FilterResult['found'] }
   | { name: 'result'; idea: SavedIdea }
   | { name: 'saved' };
 
@@ -106,7 +106,7 @@ export default function App() {
       bar = topBar({ left: close });
       body = <NewLoading key={`${from.audience}:${from.direction}:${templateId}:${mode}`} upload={from.upload} second={mode === 'collide' ? second ?? undefined : undefined}
         audience={from.audience} direction={from.direction} templateId={templateId} mode={mode}
-        onDone={(read, kept, secondRead) => go({ name: 'pick', upload: from.upload, audience: from.audience, direction: from.direction, steer: from.steer, read, secondRead, kept }, true)}
+        onDone={(read, kept, secondRead, found) => go({ name: 'pick', upload: from.upload, audience: from.audience, direction: from.direction, steer: from.steer, read, secondRead, kept, found }, true)}
         onBack={() => history.back()}
         // Nothing passed: let the user change the source, audience, direction or mode.
         onAdjust={(what) => go(what === 'source' ? { name: 'home' }
@@ -117,7 +117,7 @@ export default function App() {
     case 'pick': {
       const from = screen;
       bar = topBar({ left: close });
-      body = <NewPick ideas={from.kept} audience={from.audience} onChoose={(idea, found) => open(from, idea, found)} />;
+      body = <NewPick ideas={from.kept} found={from.found} audience={from.audience} onChoose={(idea, found) => open(from, idea, found)} />;
       break;
     }
     case 'result': {

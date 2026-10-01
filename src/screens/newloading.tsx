@@ -7,7 +7,7 @@ import { ArrowRight, Check, RefreshCw, X } from 'lucide-react';
 import { Fade, Screen } from '@/components/bits';
 import { MAX_ATTEMPTS, NEW_STEPS, useNewRun, type Mode, type NewStepId, type StepState } from '@/lib/newrun';
 import { uploadLabel } from '@/lib/upload';
-import type { GeneratedIdea, Upload, UploadRead } from '../../server/lib/types.ts';
+import type { FilterResult, GeneratedIdea, Upload, UploadRead } from '../../server/lib/types.ts';
 
 const STATE_TEXT: Record<StepState, string> = { waiting: 'Waiting', running: 'Working', done: 'Done', failed: 'Failed' };
 
@@ -40,7 +40,7 @@ export type Adjust = 'source' | 'audience' | 'steer';
 
 export function NewLoading({ upload, second, audience, direction, templateId, mode, onDone, onBack, onAdjust }: {
   upload: Upload; second?: Upload; audience: string; direction: string; templateId: string | null; mode: Mode;
-  onDone: (read: UploadRead, kept: GeneratedIdea[], secondRead?: UploadRead) => void; onBack: () => void; onAdjust: (what: Adjust) => void;
+  onDone: (read: UploadRead, kept: GeneratedIdea[], secondRead?: UploadRead, found?: FilterResult['found']) => void; onBack: () => void; onAdjust: (what: Adjust) => void;
 }) {
   const { states, progress, error, retry, asking, answer, skip, noneKept } = useNewRun({ upload, second, audience, direction, templateId, mode }, onDone);
   const [about, setAbout] = useState('');

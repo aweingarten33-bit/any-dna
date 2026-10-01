@@ -9,7 +9,30 @@
 // A failed step can be retried without redoing the ones that finished.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FilterResult, GeneratedIdea, GenerateMode, Upload, UploadRead } from '../../server/lib/types.ts';
-import { api } from './api';
+import { api, fingerprint } from './api';
+
+// Research and DNA depend only on the source (and what the user said it's
+// about), so they're kept on the device: changing the audience, mode,
+// template or direction never runs them again, even after the server forgets.
+const READ_CACHE = 'anydna.reads.v1';
+const READ_CACHE_MAX = 20;
+
+async function readKey(upload: Upload, about: string) {
+  return `${await fingerprint(upload)}:${about}`;
+}
+
+function cachedRead(key: string): UploadRead | undefined {
+  try { return (JSON.parse(localStorage.getItem(READ_CACHE) || '{}') as Record<string, { read: UploadRead }>)[key]?.read; } catch { return undefined; }
+}
+
+function cacheRead(key: string, read: UploadRead) {
+  try {
+    const all = JSON.parse(localStorage.getItem(READ_CACHE) || '{}') as Record<string, { at: number; read: UploadRead }>;
+    all[key] = { at: Date.now(), read };
+    const newest = Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, READ_CACHE_MAX);
+    localStorage.setItem(READ_CACHE, JSON.stringify(Object.fromEntries(newest)));
+  } catch { /* storage blocked or full: the server's 15-minute memory still helps */ }
+}
 
 export const NEW_STEPS = [
   { id: 'research', label: 'Research: why it works' },
@@ -50,7 +73,7 @@ type RunMemo = {
   rejected: FilterResult['rejected'];
 };
 
-export function useNewRun(input: RunInput, onDone: (read: UploadRead, kept: GeneratedIdea[], secondRead?: UploadRead) => void) {
+export function useNewRun(input: RunInput, onDone: (read: UploadRead, kept: GeneratedIdea[], secondRead?: UploadRead, found?: FilterResult['found']) => void) {
   const { upload, second, audience, direction, templateId, mode } = input;
   const [states, setStates] = useState<Record<NewStepId, StepState>>(FRESH);
   const [progress, setProgress] = useState<NewProgress>({ attempt: 1, rejectedCount: 0 });
@@ -81,6 +104,10 @@ export function useNewRun(input: RunInput, onDone: (read: UploadRead, kept: Gene
 
     const steps: Record<NewStepId, () => Promise<void>> = {
       research: async () => {
+        // A source researched before (on this device) skips both Research and DNA.
+        const [keyA, keyB] = await Promise.all([readKey(upload, about.current.a), collide ? readKey(second!, about.current.b) : null]);
+        if (!out.read) { const hit = cachedRead(keyA); if (hit) { out.read = hit; out.research = hit.research; } }
+        if (collide && !out.secondRead && keyB) { const hit = cachedRead(keyB); if (hit) { out.secondRead = hit; out.secondResearch = hit.research; } }
         await Promise.all([
           out.research ? null : api.research(upload, about.current.a, signal).then((r) => { out.research = r.output; }),
           !collide || out.secondResearch ? null : api.research(second!, about.current.b, signal).then((r) => { out.secondResearch = r.output; }),
@@ -88,8 +115,8 @@ export function useNewRun(input: RunInput, onDone: (read: UploadRead, kept: Gene
       },
       dna: async () => {
         await Promise.all([
-          out.read ? null : api.dna(out.research!, signal).then((r) => { out.read = { research: out.research!, dna: r.output }; }),
-          !collide || out.secondRead ? null : api.dna(out.secondResearch!, signal).then((r) => { out.secondRead = { research: out.secondResearch!, dna: r.output }; }),
+          out.read ? null : api.dna(out.research!, signal).then(async (r) => { out.read = { research: out.research!, dna: r.output }; cacheRead(await readKey(upload, about.current.a), out.read); }),
+          !collide || out.secondRead ? null : api.dna(out.secondResearch!, signal).then(async (r) => { out.secondRead = { research: out.secondResearch!, dna: r.output }; cacheRead(await readKey(second!, about.current.b), out.secondRead); }),
         ]);
       },
       generate: async () => {
@@ -121,7 +148,7 @@ export function useNewRun(input: RunInput, onDone: (read: UploadRead, kept: Gene
         }
       }
       const result = out.result!;
-      if (result.kept.length) { onDoneRef.current(out.read!, result.kept, out.secondRead); return; }
+      if (result.kept.length) { onDoneRef.current(out.read!, result.kept, out.secondRead, result.found); return; }
       // Every idea failed: keep the reasons and generate again with them as corrective feedback.
       out.rejected = [...out.rejected, ...result.rejected];
       if (out.attempt >= MAX_ATTEMPTS) { show(); setNoneKept(true); return; }

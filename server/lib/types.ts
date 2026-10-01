@@ -112,7 +112,12 @@ export type DnaMechanism = { name: string; how_it_works: string; why_it_works: s
 export type UploadRead = { research: SourceResearch; dna: DnaMechanism[] };
 
 /** Prompt 4's result: the ideas that passed, best first, and why the rest didn't. */
-export type FilterResult = { kept: GeneratedIdea[]; rejected: Array<{ name: string; reason: string }> };
+export type FilterResult = {
+  kept: GeneratedIdea[];
+  rejected: Array<{ name: string; reason: string }>;
+  /** The App Store search already done for each kept idea (same order), so opening one needs no second search. */
+  found?: Array<{ competitors: Competitor[]; searched: CompetitorListing[] }>;
+};
 
 /** Everything one new-flow run produces. */
 export type NewBlueprint = {

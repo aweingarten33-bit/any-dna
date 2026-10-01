@@ -53,7 +53,7 @@ async function post<T>(name: string, body: unknown, signal?: AbortSignal, checkI
 }
 
 /** The upload's fingerprint: the same one the server computes, so check-ins don't resend the bytes. */
-async function fingerprint(upload: Upload): Promise<string> {
+export async function fingerprint(upload: Upload): Promise<string> {
   const payload = upload.kind === 'text' ? upload.text : upload.kind === 'link' ? upload.url : upload.kind === 'video' ? upload.frames.join('|') : upload.dataUrl;
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${upload.kind}:${payload}`));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
