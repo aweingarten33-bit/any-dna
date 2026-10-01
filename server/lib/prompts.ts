@@ -29,7 +29,7 @@ Each mechanism must still work in a completely different domain.
 
 Put the strongest first.
 
-For anything shown to the user, use normal everyday English. Name each idea simply and explain it in one short sentence. No jargon, arrows, theory-speak, or AI language.`;
+For anything shown to the user, explain it like you're talking to a friend. Use short sentences, active voice, and everyday language. Avoid technical jargon, arrows, theory-speak, or AI language.`;
 
 /** Prompt 3 before its mode slot. */
 export const PROMPT_3_GENERATE = `3. GENERATE
@@ -109,4 +109,4 @@ export const SIDE_RULE_FAILED_FILTER = `If every idea fails, application code re
 
 export const SIDE_RULE_NAMING = `Do not use real or trademarked names as the generated app brand when that would cause confusion.`;
 
-export const SIDE_RULE_WRITING = `Write like a normal person explaining something to another normal person. Be concrete, concise and specific. Prefer plain words and specific software behavior over jargon, metaphor, mood, theory, or hype.`;
+export const SIDE_RULE_WRITING = `Write as though you're explaining something to a friend. Use common words, short sentences, active voice, and everyday language. Avoid technical jargon. Keep it concrete, concise, and specific.`;
