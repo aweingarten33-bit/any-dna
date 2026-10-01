@@ -35,7 +35,7 @@ Invent non-obvious software apps where that DNA solves a real problem.
 
 Software apps only — mobile or web. Do not return physical businesses, local service businesses, stores, agencies, restaurants, manufactured products, or other offline businesses.
 
-Before answering:
+Before writing anything, privately:
 - discard obvious “[source] for [audience]” ideas
 - push the DNA into different domains
 - generate at least 6 ideas
@@ -71,7 +71,13 @@ export const MODE_INSTRUCTIONS: Record<ModeId, string> = {
   x1000: `×1000: amplify or invert the defining mechanic until it becomes a fundamentally different app.`,
   future: `30 Years From Now: project the system into plausible 2056 conditions, then backcast to an app buildable today. Avoid sci-fi.`,
   angle: `Different Angle: reinterpret the job, economics, relationship, or who is served, then invent from that new interpretation.`,
-  collide: `Collide: use exactly one mechanism from Source A and one from Source B. Find a third context where both conditions coexist. Reject literal mashups.`,
+  collide: `Collide
+
+Two-source flow:
+
+Then use this instead of the standard Prompt 3:
+
+Use exactly one mechanism from Source A and one from Source B. Find a third context where both conditions coexist. The combination must create a new behavior neither source produces alone. Reject literal mashups.`,
 };
 
 export const PROMPT_4_FILTER = `4. FILTER
@@ -80,7 +86,7 @@ You are a blunt stranger seeing these ideas cold.
 
 For each ask:
 - Do I immediately understand it?
-- Would the target user actually want it?
+- Would the target user actually want it? Score 0–10.
 - Is the DNA essential?
 - Does this already exist for the same user?
 - Is anything just a gimmick?
@@ -92,7 +98,7 @@ Return only the winners.`;
 
 export const SIDE_RULES_INTRO = `APP RULES`;
 
-export const SIDE_RULE_CALLBACKS = `Source details are optional reference material only. Never let names, characters, imagery, themes, mood, or surface details become the product concept.`;
+export const SIDE_RULE_CALLBACKS = `Source details are provenance only. Do not use names, characters, imagery, themes, mood, or other surface details to generate the app concept. During Generate, ignore source_details and leave callbacks empty.`;
 
 export const SIDE_RULE_COMPETITORS = `Use real competitor-search data when available. Never invent competitors.`;
 
