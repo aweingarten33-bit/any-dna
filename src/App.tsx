@@ -51,7 +51,7 @@ export default function App() {
   const back = { label: 'Back', icon: <ArrowLeft size={22} />, onClick: () => history.back() };
   const close = { label: 'Close', icon: CloseIcon, onClick: goHome };
   const topBar = (options: { title?: ReactNode; left?: typeof back } = {}) =>
-    <TopBar title={options.title} left={options.left} onBrand={goHome} savedCount={saved.length} onSaved={() => go({ name: 'saved' })} />;
+    <TopBar title={options.title ?? 'Any DNA'} left={options.left} onBrand={goHome} savedCount={saved.length} onSaved={() => go({ name: 'saved' })} />;
 
   if (screen.name === 'home') {
     return <NewHome topBar={topBar()} busy={false}
