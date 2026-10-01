@@ -2,7 +2,8 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { FileText, Film, Image as ImageIcon, Link2 } from 'lucide-react';
 import { Composer, HomeBackground, type ComposerOption } from '@/components/shell';
-import { fileToUpload, typedToUpload, UploadError } from '@/lib/upload';
+import { typedToUpload, UploadError } from '@/lib/upload';
+import { exerciseFileToUpload } from '@/lib/exercise-upload';
 import type { Upload } from '../../server/lib/types.ts';
 
 const ADD_OPTIONS: ComposerOption[] = [
@@ -48,7 +49,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     setUploading(true);
     setError(null);
     try {
-      onUpload(await fileToUpload(file));
+      onUpload(await exerciseFileToUpload(file));
     } catch (caught) {
       setError(caught instanceof UploadError ? caught.message : 'That file didn’t work. Try again.');
     } finally {
