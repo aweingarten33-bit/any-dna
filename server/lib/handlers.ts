@@ -2,8 +2,8 @@
 // serves one of these, so the local dev server can route to all of them.
 import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
 import { PassError } from './ai.ts';
-import { AppStoreError, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
-import { runBuild, runDissect, runGaps, runVerdict } from './passes.ts';
+import { AppStoreError, closestCompetitors, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
+import { runBuild, runDissect, runGaps } from './passes.ts';
 import { getLowStarReviews, reviewProvider } from './reviews.ts';
 import { ideaSchema } from './schemas.ts';
 import type { AppListing, PassName, Review, ReviewsSummary } from './types.ts';
@@ -144,7 +144,7 @@ async function loadGaps(appId: string, country: string) {
   return { output, cached: false };
 }
 
-const PASSES: PassName[] = ['dissect', 'gaps', 'build', 'verdict'];
+const PASSES: PassName[] = ['dissect', 'gaps', 'build', 'compete'];
 
 async function doPass(pass: PassName, body: Record<string, unknown>, appId: string, country: string): Promise<unknown> {
   if (pass === 'dissect') { const { output, cached } = await ensureDissect(appId, country); return { output, cached }; }
@@ -155,11 +155,11 @@ async function doPass(pass: PassName, body: Record<string, unknown>, appId: stri
     const [{ listing, output: dissect }, { output: gaps }] = await Promise.all([ensureDissect(appId, country), ensureGaps(appId, country)]);
     return { output: await runBuild(listing, dissect, gaps, audience) };
   }
-  // verdict: search the store for the new idea, then judge it against what came back.
-  const idea = ideaSchema.safeParse(body.idea);
-  if (!idea.success) throw new HttpError(400, 'verdict needs the idea from the build step');
+  // compete: search the store the way someone in this audience would, and keep the closest matches. No AI.
+  const idea = ideaSchema.pick({ search_terms: true }).safeParse(body.idea);
+  if (!idea.success) throw new HttpError(400, 'compete needs the idea from the build step');
   const searched = await searchCompetitors(idea.data.search_terms, country, appId);
-  return { output: await runVerdict(idea.data, audience, searched), searched };
+  return { competitors: closestCompetitors(searched), searched };
 }
 
 // An AI pass can take a minute or more. Holding one HTTP request open that long
@@ -203,13 +203,14 @@ export function runPass(req: Request, admit: () => string | null = () => null): 
     if (!PASSES.includes(pass)) throw new HttpError(400, `pass must be one of ${PASSES.join(', ')}`);
     const appId = text(body.app_id, 'app_id', 20);
     const country = countryOf(body.country);
-    const key = JSON.stringify([pass, appId, country, pass === 'build' || pass === 'verdict' ? body.audience : null, pass === 'verdict' ? body.idea : null]);
+    const key = JSON.stringify([pass, appId, country, pass === 'build' || pass === 'compete' ? body.audience : null, pass === 'compete' ? (body.idea as { search_terms?: unknown })?.search_terms : null]);
 
     let job = jobs.get(key);
     // A failure is told once, then forgotten, so "Try again" starts fresh.
     if (job?.outcome && !job.outcome.ok && Date.now() - job.endedAt! > 2 * 60 * 1000) job = undefined;
     if (!job) {
-      const limited = admit();
+      // Only AI passes count against the limit.
+      const limited = pass === 'compete' ? null : admit();
       if (limited) throw new HttpError(429, limited);
       job = startJob(key, `${pass} ${country}/${appId}${typeof body.audience === 'string' ? ` for "${body.audience.slice(0, 40)}"` : ''}`, () => doPass(pass, body, appId, country));
     }

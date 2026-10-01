@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertMatch } from 'jsr:@std/assert@^1';
 import { forgetJobs, getReviews, resolveApp, runPass } from '../server/lib/handlers.ts';
 import { parseAppInput } from '../server/lib/itunes.ts';
-import type { FitCheck, Gaps, Idea, Verdict } from '../server/lib/types.ts';
+import type { Competitor, FitCheck, Gaps, Idea } from '../server/lib/types.ts';
 import { installFixtures, PASS_FIXTURES, SOURCE_ID } from '../dev/fixtures.ts';
 import { takeAiCall } from '../server/main.ts';
 
@@ -57,17 +57,18 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
     assertEquals(fixtures.attempts.get('dissect'), 1);
     assertEquals(fixtures.attempts.get('gaps'), 1);
 
-    const verdictResponse = await call(runPass, { pass: 'verdict', app_id: SOURCE_ID, audience: 'Dog owners', idea });
-    const verdict = verdictResponse.body.output as Verdict;
-    // The made-up app ID is dropped; names and prices are copied from the listing.
-    assertEquals(verdict.competitors.map((c) => c.app_id), ['2000000001', '2000000003']);
-    assertEquals(verdict.competitors[0].name, 'PawWalk Log (demo)');
-    assertEquals(verdict.competitors[0].formatted_price, 'Free');
-    assert(verdictResponse.body.searched.length >= 4);
-    assert(!verdictResponse.body.searched.some((app: { app_id: string }) => app.app_id === SOURCE_ID), 'source app is not its own competitor');
-    assertEquals(verdict.mvp.length, 5);
-    assertEquals(verdict.checks.desirability, 7);
-    assertEquals(verdict.go_no_go, 'go');
+    assertEquals(idea.mvp.length, 5);
+
+    // Competitors come from the App Store search, picked by code: no AI call.
+    const competeResponse = await call(runPass, { pass: 'compete', app_id: SOURCE_ID, audience: 'Dog owners', idea });
+    const competitors = competeResponse.body.competitors as Competitor[];
+    assert(competitors.length > 0 && competitors.length <= 5);
+    assert(competeResponse.body.searched.length >= 4);
+    assert(!competeResponse.body.searched.some((app: { app_id: string }) => app.app_id === SOURCE_ID), 'source app is not its own competitor');
+    assertMatch(competitors[0].overlap, /^Comes up when you search “/);
+    // Apps that came up for more of the searches rank first.
+    const hits = competitors.map((c) => c.matched_terms?.length ?? 1);
+    assertEquals(hits, [...hits].sort((x, y) => y - x));
 
     // Audience-independent passes are cached for "Try a different audience".
     const again = await call(runPass, { pass: 'dissect', app_id: SOURCE_ID });
@@ -75,7 +76,7 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
     assertEquals(fixtures.attempts.get('dissect'), 1);
 
     // Every AI call went to Muse, standard tier, not stored, with the schema in the instructions.
-    assertEquals(fixtures.aiRequests.length, 4); // dissect, gaps, build, verdict
+    assertEquals(fixtures.aiRequests.length, 3); // dissect, gaps, build
     for (const { provider, body } of fixtures.aiRequests) {
       assertEquals(provider, 'muse');
       assertEquals(body.model, 'muse-spark-1.3');
@@ -107,23 +108,10 @@ Deno.test('invalid JSON is retried once, then the run fails clearly', async () =
   }
 });
 
-Deno.test('a "go" that fails the checks becomes no-go', async () => {
-  const verdict = PASS_FIXTURES.verdict as Record<string, unknown>;
-  const fixtures = installFixtures({ reply: (pass) => (pass === 'verdict' ? { ...verdict, checks: { ...(verdict.checks as object), already_exists: true } } : undefined) });
-  try {
-    const idea = PASS_FIXTURES.build.idea;
-    const result = await call(runPass, { pass: 'verdict', app_id: SOURCE_ID, audience: 'Dog owners', idea });
-    assertEquals(result.body.output.go_no_go, 'no_go');
-    assertMatch(result.body.output.reason, /^Marked no-go/);
-  } finally {
-    fixtures.restore();
-  }
-});
-
 Deno.test('bad requests get a 400 with a reason', async () => {
   assertEquals((await call(runPass, { pass: 'nope', app_id: SOURCE_ID })).status, 400);
   assertEquals((await call(runPass, { pass: 'build', app_id: SOURCE_ID })).body.error, 'audience is required');
-  assertEquals((await call(runPass, { pass: 'verdict', app_id: SOURCE_ID, audience: 'x', idea: {} })).status, 400);
+  assertEquals((await call(runPass, { pass: 'compete', app_id: SOURCE_ID, audience: 'x', idea: {} })).status, 400);
 });
 
 Deno.test('AI_PROVIDER=claude routes the same pass to Claude', async () => {

@@ -1,6 +1,6 @@
 // Runs the pipeline for one app + audience. Reading the app and mining the
 // reviews don't depend on each other, so they run at the same time; building
-// the idea and checking competitors follow. A failed step can be retried
+// the idea follows, then a quick App Store search for competitors (no AI). A failed step can be retried
 // without redoing the steps that finished.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppListing, Blueprint } from '../../server/lib/types.ts';
@@ -62,9 +62,9 @@ export function useRun(app: AppListing, audience: string, onDone: (blueprint: Bl
         out.idea = output.idea;
       },
       compete: async () => {
-        if (out.verdict) return;
-        const result = await api.verdict(app, audience, out.idea!, signal);
-        out.verdict = result.output;
+        if (out.competitors) return;
+        const result = await api.compete(app, audience, out.idea!, signal);
+        out.competitors = result.competitors;
         out.searched = result.searched;
       },
     };
@@ -91,7 +91,7 @@ export function useRun(app: AppListing, audience: string, onDone: (blueprint: Bl
     onDoneRef.current({
       app, audience,
       reviews: out.reviews!, dissect: out.dissect!, gaps: out.gaps!, fit_check: out.fit_check!,
-      idea: out.idea!, searched: out.searched ?? [], verdict: out.verdict!,
+      idea: out.idea!, searched: out.searched ?? [], competitors: out.competitors ?? [],
     });
   }, [app, audience]);
 

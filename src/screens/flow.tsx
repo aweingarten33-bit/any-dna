@@ -167,7 +167,7 @@ export function Loading({ app, audience, onDone, onBack }: { app: AppListing; au
 /** Cards for what each finished step found, newest first. */
 function Findings({ app, progress }: { app: AppListing; progress: Progress }) {
   const cards = [];
-  const { reviews, dissect, gaps, idea, verdict, searched } = progress;
+  const { reviews, dissect, gaps, idea, competitors, searched } = progress;
   if (reviews) cards.push(<article key="reviews" className="find">
     <p className="find-k">Reviews</p>
     <p className="find-big">{reviews.low_star_count}<span> recent 1 to 3 star reviews of {app.name}</span></p>
@@ -188,10 +188,10 @@ function Findings({ app, progress }: { app: AppListing; progress: Progress }) {
     <p className="find-name">{idea.name}</p>
     <p className="find-quote is-small">{idea.pitch}</p>
   </article>);
-  if (verdict && searched) cards.push(<article key="verdict" className="find">
+  if (competitors && searched) cards.push(<article key="competitors" className="find">
     <p className="find-k">Competitors</p>
-    <p className="find-title">{verdict.competitors.length ? `${verdict.competitors.length} overlap, out of ${searched.length} apps checked` : `None overlap, out of ${searched.length} apps checked`}</p>
-    {verdict.competitors.length > 0 && <div className="find-icons">{verdict.competitors.map((comp) => <AppIcon key={comp.app_id} app={comp} size={36} />)}</div>}
+    <p className="find-title">{competitors.length ? `${competitors.length} closest, out of ${searched.length} apps found` : 'No similar apps found on the App Store'}</p>
+    {competitors.length > 0 && <div className="find-icons">{competitors.map((comp) => <AppIcon key={comp.app_id} app={comp} size={36} />)}</div>}
   </article>);
   return cards.reverse();
 }

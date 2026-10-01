@@ -21,10 +21,8 @@ One screen at a time:
 |---|---|---|
 | App name, rating, category, upfront price | Apple iTunes Lookup/Search API | From App Store |
 | Complaint themes, review counts, quoted reviews | Fetched reviews. The AI groups them and cites review IDs; the code counts the IDs and copies the review text verbatim | From N reviews |
-| Competitor names, prices, ratings | App Store search for the new idea's search terms. The AI can only pick apps from that list by ID; the code drops unknown IDs and fills in names and prices itself | From App Store |
-| DNA, fit check, the idea, MVP, verdict, overlap notes | The AI's judgment | Unverified |
-
-The verdict is **go** only if the idea passes all five checks: understandable, desirability of at least 7/10, the core loop does real work, it doesn't already exist, and it has no gimmick. A "go" that fails a check is changed to no-go in code.
+| Competitors, with names, prices, ratings | App Store search for the new idea's search terms. Code, not the AI, keeps the 5 apps that came up for the most searches, then by search rank | From App Store |
+| DNA, fit check, the idea, MVP | The AI's judgment | Unverified |
 
 **Known data limits**
 - Apple's API reports only the upfront price. In-app purchase and subscription prices aren't available, so they're never shown as fact.
@@ -46,7 +44,7 @@ server/
   main.ts                    the web server: /api routes, rate limits, static files
   schema.sql                 app_cache and ideas tables (applied on startup)
   lib/handlers.ts            resolve-app · get-reviews · run-pass
-  lib/passes.ts              the prompts: dissect · gaps · build (fit check + idea) · verdict
+  lib/passes.ts              the prompts: dissect · gaps · build (fit check + idea, MVP)
   lib/ai.ts                  one structured AI call: validate with Zod, retry once
   lib/muse.ts, lib/claude.ts the AI providers
   lib/itunes.ts              Apple's App Store API
@@ -56,7 +54,7 @@ dev/                         local API server + fictional fixture data for demo 
 tests/                       pipeline tests (Deno)
 ```
 
-Each pass is its own request, so no single request runs long. A run is 4 AI calls in 3 rounds: reading the app and mining the reviews run at the same time, then the build (fit check and idea in one call), then the verdict. The loading screen shows each finding as it arrives. Each pass returns JSON matching a schema, is validated with Zod, and is retried once if invalid. The `dissect` and `gaps` passes don't depend on the audience, so they're cached next to the listing and reviews.
+Each pass is its own request, so no single request runs long. A run is 3 AI calls in 2 rounds: reading the app and mining the reviews run at the same time, then the build (fit check, idea and MVP in one call, low reasoning effort). Competitors are then found by an App Store search in plain code, which takes about a second. Muse's time tracks how much it writes, so the prompts ask for short fields. A pass that runs longer than 20 seconds answers "pending" and the browser asks again, joining the same job. The loading screen shows each finding as it arrives. Each pass returns JSON matching a schema, is validated with Zod, and is retried once if invalid. The `dissect` and `gaps` passes don't depend on the audience, so they're cached next to the listing and reviews.
 
 ### AI provider
 
@@ -71,7 +69,7 @@ The pass prompts are adapted from the four workbench prompts:
 - **Prompt 1 (Research)** supplies the rules every pass follows: use only the supplied data, separate what happened from why, and treat "unknown" as a correct answer.
 - **Prompts 1 and 2 (Research, Extract DNA)** feed `dissect`: why the app works, not what it is, with mechanics stripped of their topic and the HotelTonight/GasBuddy depth examples.
 - **Prompt 3 (Generate)** feeds `build` (the fit check and the idea, written in one call): a real user, a repeatable loop, buildable by one person, consumer-first, the 5-second test, and no generic assistants or habit trackers. The "[source] for [X]" rejection is dropped on purpose, since moving a proven app to a new audience is what Spinoff does. A plain reskin is still rejected.
-- **Prompt 4 (Filter)** becomes `verdict`: the blunt-stranger checks, run against the fetched competitor list instead of memory.
+- **Prompt 4 (Filter)** isn't used: Spinoff doesn't grade ideas as go or no-go. The person deciding is the user.
 
 The prompts' mode instructions (Repurpose, ×1000, 2056, Different Angle, Collide) aren't used.
 

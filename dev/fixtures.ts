@@ -82,20 +82,10 @@ const PARTS: Record<string, any> = {
     what_broke_and_replaced: 'Paying to protect a streak broke. It\'s replaced by paid vet-ready activity reports.',
     first_session_flow: ['Add your dog', 'Invite your household', 'Log today\'s walk with one tap', 'See the dog\'s week'],
     differentiator_from_gaps: 'Designs out "streaks lost to sync bugs" (3 reviews): walks are logged with a time and can be added late, so a missed sync never erases history.',
-    search_terms: ['dog walk tracker', 'dog walking log', 'pet activity'],
-  },
-  verdict: {
-    competitors: [
-      { app_id: '2000000001', overlap: 'Also logs walks, but for one owner; no shared household record.' },
-      { app_id: '2000000003', overlap: 'Social walking groups, a different job.' },
-      { app_id: '9999999999', overlap: 'Not in the fetched list; must be dropped.' },
-    ],
     mvp: ['Dog profile', 'One-tap walk log', 'Household invite', 'Weekly walk view', 'Late entry for missed logs', 'Extra item that must be cut'],
-    monetization: 'Free to log. A paid vet-ready activity report. PawWalk Log (demo) is listed as Free; in-app prices are unknown.',
+    monetization: 'Free to log. A paid vet-ready activity report.',
     main_risk: 'Households may not bother logging once the novelty wears off.',
-    checks: { understandable: true, desirability: 7.4, mechanic_load_bearing: true, already_exists: false, gimmick: false },
-    go_no_go: 'go',
-    reason: 'The daily behavior already exists, and the closest app is single-owner. Worth a two-week test with five households.',
+    search_terms: ['dog walk tracker', 'dog walking log', 'pet activity'],
   },
 };
 
@@ -104,14 +94,12 @@ export const PASS_FIXTURES: Record<string, any> = {
   dissect: PARTS.dissect,
   gaps: PARTS.gaps,
   build: { components: PARTS.fit_check.components, idea: PARTS.mutate },
-  verdict: PARTS.verdict,
 };
 
 function whichPass(system: string) {
   if (system.includes('understand why this app works')) return 'dissect';
   if (system.includes('find the complaints that repeat')) return 'gaps';
   if (system.includes('You adapt the proven mechanics')) return 'build';
-  if (system.includes('blunt stranger')) return 'verdict';
   throw new Error('Unknown pass prompt');
 }
 

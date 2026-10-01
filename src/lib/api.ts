@@ -1,6 +1,6 @@
 // Calls to Spinoff's API. Same origin in production; in development Vite
 // forwards /api to the local server (see vite.config.ts).
-import type { AppListing, CompetitorListing, Dissect, FitCheck, Gaps, Idea, ReviewsSummary, Verdict } from '../../server/lib/types.ts';
+import type { AppListing, Competitor, CompetitorListing, Dissect, FitCheck, Gaps, Idea, ReviewsSummary } from '../../server/lib/types.ts';
 
 const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
 
@@ -60,6 +60,6 @@ export const api = {
     post<{ output: Gaps }>('run-pass', { pass: 'gaps', app_id: app.app_id, country: app.country }, signal),
   build: (app: AppListing, audience: string, signal?: AbortSignal) =>
     post<{ output: { fit_check: FitCheck; idea: Idea } }>('run-pass', { pass: 'build', app_id: app.app_id, country: app.country, audience }, signal),
-  verdict: (app: AppListing, audience: string, idea: Idea, signal?: AbortSignal) =>
-    post<{ output: Verdict; searched: CompetitorListing[] }>('run-pass', { pass: 'verdict', app_id: app.app_id, country: app.country, audience, idea }, signal),
+  compete: (app: AppListing, audience: string, idea: Idea, signal?: AbortSignal) =>
+    post<{ competitors: Competitor[]; searched: CompetitorListing[] }>('run-pass', { pass: 'compete', app_id: app.app_id, country: app.country, audience, idea: { search_terms: idea.search_terms } }, signal),
 };

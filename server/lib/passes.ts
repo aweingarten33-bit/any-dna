@@ -1,13 +1,15 @@
-// The four AI passes. Prompts adapted from the workbench prompts:
+// The three AI passes. Prompts adapted from the workbench prompts:
 //   rules for every pass  <- Prompt 1 (Research): evidence only, unknown is a valid answer
 //   dissect               <- Prompts 1 + 2 (Research, Extract DNA): why it works, mechanics not features
 //   build (fit + idea)    <- Prompt 3 (Generate): real user, repeatable loop, buildable by one person
-//   verdict               <- Prompt 4 (Filter): the blunt-stranger checks, run against fetched competitors
+// Competitors are found in plain code (itunes.ts), not by the AI.
+// Speed: Muse's time tracks how much it writes (about 125 tokens a second), so
+// every field asks for few words.
 // Prompt 3's "never [source] for [X]" rule is left out on purpose: carrying a
 // proven app to a new audience is what Spinoff does. A reskin is still rejected.
 import { structuredCall } from './ai.ts';
-import { buildSchema, dissectSchema, gapsModelSchema, verdictModelSchema } from './schemas.ts';
-import type { AppListing, Competitor, CompetitorListing, Dissect, FitCheck, Gaps, Idea, Review, Verdict } from './types.ts';
+import { buildSchema, dissectSchema, gapsModelSchema } from './schemas.ts';
+import type { AppListing, Dissect, FitCheck, Gaps, Idea, Review } from './types.ts';
 
 const RULES = `You are one step in Spinoff, a tool that takes an app that already works and adapts it for a new audience.
 
@@ -15,7 +17,7 @@ Rules:
 - Use only the data supplied in this message. Never invent facts, apps, prices, URLs, numbers or market claims.
 - Separate what the data shows from your reading of why. A feature existing does not mean it caused success.
 - Unknown is a correct answer. When the data doesn't show something, say "unknown" instead of guessing.
-- Plain English. Short sentences. No jargon, no hype.
+- Plain English. Short sentences. No jargon, no hype. Every field as short as it can be while staying specific.
 - Never use the word "niche".`;
 
 function listingBlock(app: AppListing) {
@@ -34,6 +36,10 @@ function reviewLines(reviews: Review[], limit: number, withIds: boolean) {
 }
 
 // ---- dissect -------------------------------------------------------------
+
+// Fewer reviews in means less to read; these are enough to see the pattern.
+const DISSECT_REVIEWS = 60;
+const GAPS_REVIEWS = 120;
 
 export function runDissect(app: AppListing, reviews: Review[]): Promise<Dissect> {
   return structuredCall({
@@ -60,7 +66,7 @@ Fields:
 - unknowns: what this data can't tell you.
 
 The listing description is the developer's own marketing; treat its claims as claims. The 1 to 3 star reviews show where the mechanics strain.`,
-    user: `App Store listing:\n${listingBlock(app)}\n\nRecent 1 to 3 star reviews (${reviews.length} total, up to 120 shown):\n${reviewLines(reviews, 120, false) || '(none fetched)'}`,
+    user: `App Store listing:\n${listingBlock(app)}\n\nRecent 1 to 3 star reviews (${reviews.length} total, up to ${DISSECT_REVIEWS} shown):\n${reviewLines(reviews, DISSECT_REVIEWS, false) || '(none fetched)'}`,
   });
 }
 
@@ -68,18 +74,18 @@ The listing description is the developer's own marketing; treat its claims as cl
 
 export async function runGaps(app: AppListing, reviews: Review[]): Promise<Gaps> {
   if (!reviews.length) return { repeated_complaints: [] };
-  const shown = reviews.slice(0, 250);
+  const shown = reviews.slice(0, GAPS_REVIEWS);
   const result = await structuredCall({
     schema: gapsModelSchema,
     effort: 'low',
     system: `${RULES}
 
 Your job: find the complaints that repeat across these 1 to 3 star reviews of ${app.name}.
-- Group reviews by the underlying problem, not by wording. Up to 8 themes.
+- Group reviews by the underlying problem, not by wording. Up to 6 themes, the biggest first. Theme names under 10 words.
 - For each theme list the IDs (like "r12") of every review that makes that complaint. Only cite reviews that actually make it.
 - about: "mechanic" if the complaint is about how the app works (pricing model, ads, reliability, onboarding, notifications, matching...), which would follow the mechanic to any audience. "subject" if it's about the app's own topic or content and wouldn't carry over.
 - Skip one-off complaints. A theme needs at least two reviews.`,
-    user: `Reviews:\n${reviewLines(shown, 250, true)}`,
+    user: `Reviews:\n${reviewLines(shown, GAPS_REVIEWS, true)}`,
   });
   const byId = new Map(shown.map((review, index) => [`r${index + 1}`, review]));
   const complaints = result.themes.map((theme) => {
@@ -104,7 +110,8 @@ export async function runBuild(app: AppListing, dissect: Dissect, gaps: Gaps, au
   const carryable = gaps.repeated_complaints.filter((complaint) => complaint.about === 'mechanic');
   const result = await structuredCall({
     schema: buildSchema,
-    effort: 'medium',
+    // Low effort: the prompt already spells out the reasoning, and medium took about a minute.
+    effort: 'low',
     system: `${RULES}
 
 You adapt the proven mechanics of ${app.name} for a new audience: ${audience}. Do it in two parts, in order.
@@ -114,10 +121,10 @@ Judge each component by one question: does this audience already have the behavi
 - survives: they already do this, often enough. Keep it as is.
 - adapts: the behavior exists but in a different form or rhythm. Say what changes.
 - breaks: they don't do this. Example: a daily streak breaks for people selling a car, because nobody sells a car daily.
-One row each for core_loop, frequency_required, reward_type, retention_lever, monetization_trigger and network_effect, then one row per dependency. Use those plain names as "component".
-- audience_behavior: what this audience actually does today that is relevant, concretely.
-- reason: one or two sentences.
-- replacement: for "adapts", the adapted version. For "breaks", a replacement built on a behavior this audience does have. For "survives", an empty string.
+One row each for core_loop, frequency_required, reward_type, retention_lever, monetization_trigger and network_effect, then one row for each of the two most important dependencies. Use those plain names as "component".
+- audience_behavior: what this audience actually does today that is relevant, concretely. One sentence.
+- reason: one short sentence.
+- replacement: for "adapts", the adapted version. For "breaks", a replacement built on a behavior this audience does have. For "survives", an empty string. One sentence.
 This is your judgment, not fetched data, so don't present it as fact or cite numbers.
 
 PART 2 — idea: one new app for ${audience}, built from Part 1.
@@ -134,76 +141,23 @@ Reject before answering: a generic AI assistant, chatbot, dashboard, habit track
 Idea fields:
 - name: a short product name.
 - pitch: one sentence, under 20 words.
-- core_loop: how the loop works for this audience.
-- what_broke_and_replaced: what didn't survive and what took its place.
-- first_session_flow: 3 to 6 steps, what a new user does in their first session.
-- differentiator_from_gaps: the complaint it designs out (name the theme and its review count) and how.
+- core_loop: how the loop works for this audience. One or two sentences.
+- what_broke_and_replaced: what didn't survive and what took its place. One or two sentences.
+- first_session_flow: 3 to 5 steps, what a new user does in their first session. A few words each.
+- differentiator_from_gaps: the complaint it designs out (name the theme and its review count) and how. One or two sentences.
+- mvp: 3 to 5 features, the smallest version that tests the core loop. A few words each.
+- monetization: how it would make money, in one or two sentences. Don't state prices: you have no price data.
+- main_risk: the single most likely reason it fails, in one sentence.
 - search_terms: 3 or 4 short phrases someone in this audience would type into the App Store to find an app that does this job. Not the product name.`,
     user: `Audience: ${audience}\n\nSource app: ${app.name} (category: ${app.category})\n\nMechanics:\n${JSON.stringify(dissect, null, 2)}\n\nRepeated complaints about how ${app.name} works (counted from fetched reviews):\n${carryable.length ? carryable.map((complaint) => `- ${complaint.theme} (${complaint.evidence_count} reviews)`).join('\n') : '(none found)'}`,
   });
   return {
-    fit_check: { components: result.components.slice(0, 14).map((row) => ({ ...row, replacement: row.status === 'survives' ? '' : row.replacement })) },
+    fit_check: { components: result.components.slice(0, 10).map((row) => ({ ...row, replacement: row.status === 'survives' ? '' : row.replacement })) },
     idea: {
       ...result.idea,
       first_session_flow: result.idea.first_session_flow.slice(0, 6),
+      mvp: result.idea.mvp.map((item) => item.trim()).filter(Boolean).slice(0, 5),
       search_terms: result.idea.search_terms.map((term) => term.trim()).filter(Boolean).slice(0, 4),
     },
-  };
-}
-
-// ---- verdict -------------------------------------------------------------
-
-export async function runVerdict(idea: Idea, audience: string, searched: CompetitorListing[]): Promise<Verdict> {
-  const listed = searched.map((app) => ({
-    app_id: app.app_id, name: app.name, developer: app.developer, category: app.category,
-    upfront_price: app.formatted_price || 'unknown', rating: app.rating, rating_count: app.rating_count, found_by_searching: app.matched_term,
-  }));
-  const result = await structuredCall({
-    schema: verdictModelSchema,
-    effort: 'medium',
-    system: `${RULES}
-
-You are a blunt stranger seeing this pitch for the first time. You know nothing about the app it came from.
-Below the pitch is every app the App Store returned when we searched for this idea. That list is your only evidence about competitors.
-
-Decide:
-1. understandable: after one read, do you know what it is and who it's for?
-2. desirability: 0 to 10. If you were in this audience, would you actually use it or pay for it?
-3. mechanic_load_bearing: does the core loop do real work? If you removed it and the product worked the same way, it's decoration: false.
-4. already_exists: does an app on the list already do this job for these same people?
-5. gimmick: is there an invented restriction, random theme or rule with no obvious benefit to the user?
-
-go only if understandable, desirability 7 or more, mechanic load-bearing, not already existing, and no gimmick. Otherwise no_go.
-
-Fields:
-- competitors: up to 5 apps from the list that overlap the idea, by app_id, most overlapping first. overlap: one sentence on what they share and what differs. Never name an app that isn't on the list. An empty list is a valid answer.
-- mvp: at most 5 features, the smallest version that tests the core loop.
-- monetization: how it would make money. If you mention a price, it must be a listed app's upfront price from the list, named. Note that the App Store doesn't publish in-app purchase prices, so subscription prices are unknown.
-- main_risk: the single most likely reason this fails.
-- reason: two or three sentences explaining the call.`,
-    user: `Audience: ${audience}\n\nPitch:\n${JSON.stringify({ name: idea.name, pitch: idea.pitch, core_loop: idea.core_loop, first_session_flow: idea.first_session_flow, differentiator: idea.differentiator_from_gaps }, null, 2)}\n\nApp Store search results (${listed.length}):\n${JSON.stringify(listed, null, 2)}`,
-  });
-
-  // Names and prices come from the fetched listing, never from the model.
-  const byId = new Map(searched.map((app) => [app.app_id, app]));
-  const seen = new Set<string>();
-  const competitors: Competitor[] = result.competitors.flatMap((pick) => {
-    const app = byId.get(pick.app_id.trim());
-    if (!app || seen.has(app.app_id)) return [];
-    seen.add(app.app_id);
-    return [{ ...app, overlap: pick.overlap }];
-  }).slice(0, 5);
-
-  const checks = { ...result.checks, desirability: Math.max(0, Math.min(10, Math.round(result.checks.desirability))) };
-  const passes = checks.understandable && checks.desirability >= 7 && checks.mechanic_load_bearing && !checks.already_exists && !checks.gimmick;
-  const overridden = result.go_no_go === 'go' && !passes;
-  return {
-    competitors,
-    mvp: result.mvp.map((item) => item.trim()).filter(Boolean).slice(0, 5),
-    monetization: result.monetization,
-    main_risk: result.main_risk,
-    go_no_go: passes ? result.go_no_go : 'no_go',
-    reason: overridden ? `Marked no-go because it failed at least one check. ${result.reason}` : result.reason,
-    checks,
   };
 }

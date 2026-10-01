@@ -105,8 +105,8 @@ export default function App() {
       break;
     case 'to-result':
       bar = topBar({ left: close });
-      body = <Divider n="03" part="Part 3 of 3" title="Your blueprint is ready" sub={`${screen.idea.output_json.idea.name}: six sections, one card each. Swipe through.`} action="Show me"
-        band={[screen.idea.output_json.idea.name, `For ${screen.idea.output_json.audience.toLowerCase()}`, screen.idea.output_json.verdict.go_no_go === 'go' ? 'Go' : 'No-go']}
+      body = <Divider n="03" part="Part 3 of 3" title="Your blueprint is ready" sub={`${screen.idea.output_json.idea.name}: five sections, one card each. Swipe through.`} action="Show me"
+        band={[screen.idea.output_json.idea.name, `For ${screen.idea.output_json.audience.toLowerCase()}`, 'Same mechanics']}
         onContinue={() => go({ name: 'result', idea: screen.idea }, true)} />;
       break;
     case 'result':

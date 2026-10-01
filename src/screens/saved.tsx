@@ -16,7 +16,7 @@ export function Saved({ ideas, onOpen, onDifferentAudience, onDelete, onNew }: {
       ? <p className="screen-note">Ideas you build show up here.</p>
       : <ul className="saved">
           {ideas.map((item, i) => {
-            const { app, idea, verdict } = item.output_json;
+            const { app, idea } = item.output_json;
             return <li key={item.id} className="fade" style={{ '--d': `${200 + i * 50}ms` } as CSSProperties}>
               <button type="button" className="saved-main" onClick={() => onOpen(item)}>
                 <span className="saved-n">{String(i + 1).padStart(2, '0')}</span>
@@ -24,7 +24,6 @@ export function Saved({ ideas, onOpen, onDifferentAudience, onDelete, onNew }: {
                   <b>{idea.name}</b>
                   <small><AppIcon app={app} size={16} />{app.name} <ArrowRight size={11} aria-hidden="true" /> {item.audience}</small>
                 </span>
-                <span className={`saved-call ${verdict.go_no_go === 'go' ? 'is-go' : 'is-nogo'}`}>{verdict.go_no_go === 'go' ? 'Go' : 'No-go'}</span>
               </button>
               <div className="saved-actions">
                 <span className="saved-date">{new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>

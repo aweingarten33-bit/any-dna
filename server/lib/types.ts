@@ -81,42 +81,35 @@ export type Idea = {
   what_broke_and_replaced: string;
   first_session_flow: string[];
   differentiator_from_gaps: string;
+  /** The smallest version that tests the core loop, at most 5 features. */
+  mvp: string[];
+  monetization: string;
+  main_risk: string;
   search_terms: string[];
 };
 
 /** An app found by searching the App Store for the new idea. Every field is fetched data. */
 export type CompetitorListing = Pick<AppListing, 'app_id' | 'name' | 'developer' | 'icon' | 'rating' | 'rating_count' | 'price' | 'formatted_price' | 'category' | 'url'> & {
   matched_term: string;
+  /** Every search term this app came up for. */
+  matched_terms?: string[];
 };
 
 export type Competitor = CompetitorListing & {
-  /** Model judgment of how much this app overlaps the idea. */
+  /** Why it's listed: which searches it came up for. */
   overlap: string;
 };
 
-export type Verdict = {
-  competitors: Competitor[];
-  mvp: string[];
-  monetization: string;
-  main_risk: string;
-  go_no_go: 'go' | 'no_go';
-  reason: string;
-  checks: {
-    understandable: boolean;
-    desirability: number;
-    mechanic_load_bearing: boolean;
-    already_exists: boolean;
-    gimmick: boolean;
-  };
-};
+/** Saved ideas from before the competitor check was plain code still carry this. */
+export type LegacyVerdict = { competitors: Competitor[]; mvp: string[]; monetization: string; main_risk: string };
 
-export type PassName = 'dissect' | 'gaps' | 'build' | 'verdict';
+export type PassName = 'dissect' | 'gaps' | 'build' | 'compete';
 
 export type PassOutputs = {
   dissect: Dissect;
   gaps: Gaps;
   build: { fit_check: FitCheck; idea: Idea };
-  verdict: Verdict;
+  compete: { competitors: Competitor[]; searched: CompetitorListing[] };
 };
 
 /** Everything one run produces. Saved on the device as ideas.output_json. */
@@ -128,9 +121,12 @@ export type Blueprint = {
   gaps: Gaps;
   fit_check: FitCheck;
   idea: Idea;
-  /** Every App Store search result considered, before the verdict picked the overlaps. */
+  /** Every App Store search result for the idea's search terms. */
   searched: CompetitorListing[];
-  verdict: Verdict;
+  /** The closest of those: the apps that came up for the most searches, then the highest ranked. */
+  competitors: Competitor[];
+  /** Only on ideas saved before the change. */
+  verdict?: LegacyVerdict;
 };
 
 export type SavedIdea = {

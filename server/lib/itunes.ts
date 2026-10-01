@@ -1,6 +1,6 @@
 // Apple's public iTunes Search / Lookup API. No key needed.
 // Docs: https://performance-partners.apple.com/search-api
-import type { AppListing, CompetitorListing } from './types.ts';
+import type { AppListing, CompetitorListing, Competitor } from './types.ts';
 
 const BASE = 'https://itunes.apple.com';
 
@@ -91,21 +91,40 @@ export async function searchApps(term: string, country: string, limit = 5): Prom
 export async function searchCompetitors(terms: string[], country: string, excludeAppId: string, perTerm = 8, max = 15): Promise<CompetitorListing[]> {
   const unique = [...new Set(terms.map((term) => term.trim()).filter(Boolean))].slice(0, 4);
   const settled = await Promise.allSettled(unique.map((term) => searchApps(term, country, perTerm).then((apps) => ({ term, apps }))));
-  const seen = new Set([excludeAppId]);
+  const seen = new Map<string, CompetitorListing>();
   const found: CompetitorListing[] = [];
   // Interleave terms so one broad term can't crowd out the others.
   const lists = settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
   for (let rank = 0; rank < perTerm; rank += 1) {
     for (const { term, apps } of lists) {
       const app = apps[rank];
-      if (!app || seen.has(app.app_id)) continue;
-      seen.add(app.app_id);
-      found.push({
+      if (!app || app.app_id === excludeAppId) continue;
+      const known = seen.get(app.app_id);
+      if (known) { if (!known.matched_terms!.includes(term)) known.matched_terms!.push(term); continue; }
+      const listing: CompetitorListing = {
         app_id: app.app_id, name: app.name, developer: app.developer, icon: app.icon, rating: app.rating, rating_count: app.rating_count,
-        price: app.price, formatted_price: app.formatted_price, category: app.category, url: app.url, matched_term: term,
-      });
+        price: app.price, formatted_price: app.formatted_price, category: app.category, url: app.url, matched_term: term, matched_terms: [term],
+      };
+      seen.set(app.app_id, listing);
+      found.push(listing);
     }
   }
   if (!lists.length && unique.length) throw new AppStoreError('Couldn’t search the App Store for competitors. Please try again.');
   return found.slice(0, max);
+}
+
+/**
+ * The closest competitors, chosen by plain rules instead of the AI: apps that
+ * came up for more of the idea's searches first, then by search rank.
+ */
+export function closestCompetitors(searched: CompetitorListing[], max = 5): Competitor[] {
+  return searched
+    .map((app, rank) => ({ app, rank, hits: app.matched_terms?.length ?? 1 }))
+    .sort((a, b) => b.hits - a.hits || a.rank - b.rank)
+    .slice(0, max)
+    .map(({ app }) => {
+      const terms = (app.matched_terms ?? [app.matched_term]).map((term) => `“${term}”`);
+      const list = terms.length > 1 ? `${terms.slice(0, -1).join(', ')} and ${terms[terms.length - 1]}` : terms[0];
+      return { ...app, overlap: `Comes up when you search ${list}.` };
+    });
 }

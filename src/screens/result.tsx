@@ -1,12 +1,12 @@
 // The blueprint: one swipeable panel per section.
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUpRight, Check, X } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight, ArrowUpRight } from 'lucide-react';
 import { AppIcon, Rating, Source, price } from '@/components/bits';
 import type { Blueprint, FitComponent } from '../../server/lib/types.ts';
 
-const CARDS = ['DNA', 'What survives and what breaks', 'The idea', 'Competitors', 'MVP', 'Verdict'] as const;
-const SHORT = ['DNA', 'Fit', 'Idea', 'Rivals', 'MVP', 'Verdict'];
-const NEXT = ['DNA', 'What survives', 'The idea', 'Competitors', 'MVP', 'Verdict'];
+const CARDS = ['DNA', 'What survives and what breaks', 'The idea', 'Competitors', 'MVP'] as const;
+const SHORT = ['DNA', 'Fit', 'Idea', 'Rivals', 'MVP'];
+const NEXT = ['DNA', 'What survives', 'The idea', 'Competitors', 'MVP'];
 
 const LABELS: Record<string, string> = {
   core_loop: 'Core loop', frequency_required: 'Frequency', reward_type: 'Reward', retention_lever: 'Brings people back',
@@ -34,6 +34,11 @@ const STATUS: Record<FitComponent['status'], string> = { survives: 'Survives', a
 
 export function Result({ blueprint, onDifferentAudience, onStartOver }: { blueprint: Blueprint; onDifferentAudience: () => void; onStartOver: () => void }) {
   const { app, audience, reviews, dissect, gaps, fit_check, idea, searched, verdict } = blueprint;
+  // Ideas saved before the competitor check moved to plain code keep these on the old verdict.
+  const competitors = blueprint.competitors ?? verdict?.competitors ?? [];
+  const mvp = idea.mvp ?? verdict?.mvp ?? [];
+  const monetization = idea.monetization ?? verdict?.monetization ?? '';
+  const mainRisk = idea.main_risk ?? verdict?.main_risk ?? '';
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
@@ -56,13 +61,6 @@ export function Result({ blueprint, onDifferentAudience, onStartOver }: { bluepr
   const counts = { survives: 0, adapts: 0, breaks: 0 };
   fit_check.components.forEach((row) => { counts[row.status] += 1; });
   const carryover = gaps.repeated_complaints.filter((complaint) => complaint.about === 'mechanic');
-  const isGo = verdict.go_no_go === 'go';
-  const checks: Array<[boolean, string]> = [
-    [verdict.checks.understandable, 'Clear after one read'],
-    [verdict.checks.mechanic_load_bearing, 'The core loop does real work'],
-    [!verdict.checks.already_exists, verdict.checks.already_exists ? 'Already on the App Store' : 'Not already on the App Store'],
-    [!verdict.checks.gimmick, verdict.checks.gimmick ? 'Has a gimmick' : 'No gimmicks'],
-  ];
 
   return <section className="blueprint">
     <div className="bp-top">
@@ -125,10 +123,10 @@ export function Result({ blueprint, onDifferentAudience, onStartOver }: { bluepr
         </section>
       </Panel>
 
-      <Panel index={3} active={active === 3} title="Competitors" source={<><Source fetched /><Source /></>}>
-        <p className="lede">Searched the App Store for {idea.search_terms.map((term, i) => <span key={term}>{i > 0 && ', '}<q>{term}</q></span>)}. Checked {searched.length} apps. {verdict.competitors.length ? `${verdict.competitors.length} overlap the idea.` : 'None do the same job for this audience.'}</p>
+      <Panel index={3} active={active === 3} title="Competitors" source={<Source fetched />}>
+        <p className="lede">Searched the App Store for {idea.search_terms.map((term, i) => <span key={term}>{i > 0 && ', '}<q>{term}</q></span>)}. Found {searched.length} apps. {competitors.length ? `These ${competitors.length} came up the most.` : 'Nothing came up.'}</p>
         <ul className="rivals">
-          {verdict.competitors.map((comp, i) => <li key={comp.app_id}>
+          {competitors.map((comp, i) => <li key={comp.app_id}>
             <span className="rival-n">{String(i + 1).padStart(2, '0')}</span>
             <AppIcon app={comp} size={48} />
             <div className="rival-main">
@@ -139,34 +137,22 @@ export function Result({ blueprint, onDifferentAudience, onStartOver }: { bluepr
             <span className="rival-price">{price(comp)}</span>
           </li>)}
         </ul>
-        <p className="fine">Names, prices and ratings come from the App Store. Prices are upfront prices; Apple doesn’t publish in-app or subscription prices. Overlap notes are unverified.</p>
+        <p className="fine">Names, prices and ratings come from the App Store. Prices are upfront prices; Apple doesn’t publish in-app or subscription prices. Coming up in the same search doesn’t mean an app does the same job; open it to check.</p>
       </Panel>
 
       <Panel index={4} active={active === 4} title="MVP" source={<Source />}>
         <p className="lede">The smallest version that tests the core loop.</p>
-        <ol className="mvp">{verdict.mvp.map((item, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><p>{item}</p></li>)}</ol>
-        <dl className="stack-fields"><Field label="How it makes money">{verdict.monetization}</Field></dl>
-      </Panel>
-
-      <Panel index={5} active={active === 5} title="Verdict" source={<Source />}>
-        <div className={`call ${isGo ? 'is-go' : 'is-nogo'}`}>
-          <span className="call-word">{isGo ? 'Go' : 'No-go'}</span>
-          <span className="call-sub">{isGo ? 'Worth testing' : 'Not worth testing as is'}</span>
-        </div>
-        <p className="verdict-reason">{verdict.reason}</p>
-        <div className="desire">
-          <div className="desire-top"><span>Would people want it</span><b>{verdict.checks.desirability}<em>/10</em></b></div>
-          <div className="desire-bar" style={{ '--v': verdict.checks.desirability / 10 } as CSSProperties}><i /><span className="desire-mark" title="Needs 7 to pass" /></div>
-        </div>
-        <ul className="check-grid">
-          {checks.map(([pass, text]) => <li key={text} className={pass ? 'is-pass' : 'is-fail'}>{pass ? <Check size={16} strokeWidth={3} /> : <X size={16} strokeWidth={3} />}<span>{text}</span></li>)}
-        </ul>
-        <dl className="stack-fields"><Field label="Main risk">{verdict.main_risk}</Field></dl>
+        <ol className="mvp">{mvp.map((item, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><p>{item}</p></li>)}</ol>
+        <dl className="stack-fields">
+          <Field label="How it makes money">{monetization}</Field>
+          {mainRisk && <Field label="Main risk">{mainRisk}</Field>}
+        </dl>
         <div className="verdict-actions">
           <button type="button" className="btn-pill is-primary" onClick={onDifferentAudience} data-testid="button-different-audience"><span>Try a different audience</span><ArrowRight size={18} /></button>
           <button type="button" className="btn-pill" onClick={onStartOver}><span>Start with another app</span></button>
         </div>
       </Panel>
+
     </div>
 
     <div className="bp-nav">

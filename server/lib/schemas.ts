@@ -40,28 +40,14 @@ export const ideaSchema = z.object({
   what_broke_and_replaced: z.string(),
   first_session_flow: z.array(z.string()),
   differentiator_from_gaps: z.string(),
+  mvp: z.array(z.string()),
+  monetization: z.string(),
+  main_risk: z.string(),
   search_terms: z.array(z.string()),
 });
 
 /** Fit check and idea from one call. */
 export const buildSchema = z.object({ components: fitCheckSchema.shape.components, idea: ideaSchema });
-
-/** The model may only point at apps from the fetched list, by ID; code fills in names and prices. */
-export const verdictModelSchema = z.object({
-  competitors: z.array(z.object({ app_id: z.string(), overlap: z.string() })),
-  mvp: z.array(z.string()),
-  monetization: z.string(),
-  main_risk: z.string(),
-  checks: z.object({
-    understandable: z.boolean(),
-    desirability: z.number(),
-    mechanic_load_bearing: z.boolean(),
-    already_exists: z.boolean(),
-    gimmick: z.boolean(),
-  }),
-  go_no_go: z.enum(['go', 'no_go']),
-  reason: z.string(),
-});
 
 const UNSUPPORTED = ['$schema', 'minItems', 'maxItems', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'pattern', 'format'];
 
