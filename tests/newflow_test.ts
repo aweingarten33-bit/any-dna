@@ -250,3 +250,35 @@ Deno.test('rate limit: a visitor is stopped after the hourly allowance', () => {
   assertMatch(takeAiCall('203.0.113.9', now) ?? '', /hourly limit/);
   assertEquals(takeAiCall('203.0.113.10', now), null);
 });
+
+Deno.test('pasted links: the service\'s public title, creator and cover image reach the prompt; songs get Apple Music facts', async () => {
+  const fixtures = installFixtures();
+  try {
+    const yt = await flowCall({ pass: 'read', upload: { kind: 'link', url: 'https://youtu.be/demo' }, audience: 'Runners' });
+    assertEquals(yt.status, 200);
+    let input = JSON.stringify(fixtures.aiRequests.at(-1)?.body.input);
+    assertMatch(input, /YouTube video: “Superman Theme \(Full Orchestra\)” by John Williams/);
+    assertMatch(input, /"type":"input_image"/);
+
+    fixtures.aiRequests.length = 0;
+    await flowCall({ pass: 'read', upload: { kind: 'link', url: 'https://open.spotify.com/track/abc' }, audience: 'Commuters' });
+    input = JSON.stringify(fixtures.aiRequests.at(-1)?.body.input);
+    assertMatch(input, /Spotify song: “Kiss from a Rose” by Seal/);
+    assertMatch(input, /Apple Music lists this song \(fetched\)/);
+
+    const tt = await flowCall({ pass: 'suggest', upload: { kind: 'link', url: 'https://www.tiktok.com/@festivalfran/video/1' } });
+    assertEquals(tt.status, 200);
+
+    // Instagram hid the post: say so instead of guessing.
+    const ig = await flowCall({ pass: 'suggest', upload: { kind: 'link', url: 'https://www.instagram.com/p/xyz/' } });
+    assertEquals(ig.status, 400);
+    assertMatch(ig.body.error, /Instagram didn’t share that link/);
+
+    // Only the supported services are ever fetched.
+    const other = await flowCall({ pass: 'suggest', upload: { kind: 'link', url: 'https://example.com/private' } });
+    assertEquals(other.status, 400);
+    assert(!fixtures.calls.some((call) => call.startsWith('example.com')), 'an unsupported link is never fetched');
+  } finally {
+    fixtures.restore();
+  }
+});

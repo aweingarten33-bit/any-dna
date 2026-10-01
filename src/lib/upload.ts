@@ -3,6 +3,7 @@
 // is converted to JPEG. The bytes never leave this device except to the
 // server for the single AI call — nothing is stored.
 import type { Upload } from '../../server/lib/types.ts';
+import { LINK_NAMES, linkSource } from '../../server/lib/links.ts';
 
 const MAX_DIMENSION = 1600;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -146,7 +147,24 @@ export async function fileToUpload(file: File): Promise<Upload> {
 export function uploadLabel(upload: Upload): string {
   if (upload.kind === 'text' && upload.text.startsWith('The song “')) return upload.text.replace(/^The song /, '');
   if (upload.kind === 'text') return upload.text.length > 60 ? `“${upload.text.slice(0, 60)}…”` : `“${upload.text}”`;
+  if (upload.kind === 'link') { const source = linkSource(upload.url); return source ? `your ${LINK_NAMES[source]} link` : 'your link'; }
   if (upload.kind === 'photo') return 'your photo';
   if (upload.kind === 'video') return 'your video';
   return upload.filename || 'your document';
+}
+
+/**
+ * What the user typed in the box: a supported link becomes a link upload,
+ * any other web address is refused with the services we can read, and
+ * anything else is their words.
+ */
+export function typedToUpload(text: string): Upload {
+  const trimmed = text.trim();
+  const looksLikeLink = /^(https?:\/\/|www\.)/i.test(trimmed) || /^[\w-]+(\.[\w-]+)+\/\S*$/.test(trimmed);
+  const candidate = looksLikeLink && !/\s/.test(trimmed)
+    ? (trimmed.startsWith('http') ? trimmed : `https://${trimmed}`).replace(/^http:/, 'https:')
+    : null;
+  if (!candidate) return { kind: 'text', text: trimmed };
+  if (linkSource(candidate)) return { kind: 'link', url: candidate };
+  throw new UploadError('Paste a Spotify, Apple Music, YouTube, TikTok or Instagram link, or type what it is.');
 }

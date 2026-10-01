@@ -9,6 +9,7 @@ import { generateSchema, readSchema } from './schemas.ts';
 import type { NewPassName } from './types.ts';
 import { unzipSync } from 'npm:fflate@^0.8.2';
 import { templateById } from './templates.ts';
+import { LINK_NAMES, LinkError, linkImage, readLink } from './links.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -116,7 +117,7 @@ function docxText(dataUrl: string): string {
     .join('\n');
 }
 
-export type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown; frames?: unknown };
+export type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown; frames?: unknown; url?: unknown };
 
 async function normalizeUpload(raw: unknown): Promise<UploadInput> {
   const body = (raw ?? {}) as RawUpload;
@@ -125,6 +126,21 @@ async function normalizeUpload(raw: unknown): Promise<UploadInput> {
     const text = typeof body.text === 'string' ? body.text.trim() : '';
     if (!text) throw new HttpError(400, 'Describe what you want an app about.');
     return { kind: 'text', text: text.slice(0, 4000), label: 'their words' };
+  }
+  if (body.kind === 'link') {
+    const url = typeof body.url === 'string' ? body.url.trim().slice(0, 600) : '';
+    let info;
+    try {
+      info = await readLink(url);
+    } catch (error) {
+      throw new HttpError(400, error instanceof LinkError && error.message !== 'unsupported' ? error.message : 'Paste a Spotify, Apple Music, YouTube, TikTok or Instagram link.');
+    }
+    const service = LINK_NAMES[info.source];
+    const text = [
+      `${service} ${info.kind}: “${info.title || 'untitled'}”${info.creator ? ` by ${info.creator}` : ''}`,
+      info.detail ? `Details: ${info.detail}` : '',
+    ].filter(Boolean).join('\n').slice(0, 2000);
+    return { kind: 'link', text, imageDataUrl: await linkImage(info.imageUrl), label: `a ${service} ${info.kind}` };
   }
   if (body.kind === 'video') {
     const frames = Array.isArray(body.frames) ? body.frames.filter((frame): frame is string => typeof frame === 'string').slice(0, 6) : [];
@@ -161,7 +177,8 @@ async function sha256Hex(input: string): Promise<string> {
 
 /** The upload's fingerprint. The browser computes the same one, so a check-in can name the upload without resending it. */
 export function uploadFingerprintSource(raw: RawUpload): string {
-  const payload = typeof raw.dataUrl === 'string' ? raw.dataUrl
+  const payload = typeof raw.url === 'string' ? raw.url
+    : typeof raw.dataUrl === 'string' ? raw.dataUrl
     : Array.isArray(raw.frames) ? raw.frames.join('|')
     : typeof raw.text === 'string' ? raw.text : '';
   return `${String(raw.kind)}:${payload}`;
@@ -236,7 +253,8 @@ async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Pro
     const upload = await normalizeUpload(body.upload);
     if (pass === 'suggest') return { output: await runAudienceSuggest(upload) };
     // Typed words that name a song get real facts from Apple Music. A failed lookup just means no facts.
-    const song = upload.kind === 'text' ? await findSong(upload.text, country).catch(() => null) : null;
+    const songText = upload.kind === 'text' ? upload.text : upload.kind === 'link' && / song: /.test(upload.text) ? `${upload.text.split('\n')[0]} song` : '';
+    const song = songText ? await findSong(songText, country).catch(() => null) : null;
     return { output: await runRead(upload, audience, direction, song) };
   }
   if (pass === 'invent') return { output: await runInvent(readOf(body.read), audience, direction, templateId) };

@@ -65,7 +65,9 @@ export type Upload =
   | { kind: 'photo'; dataUrl: string; filename: string }
   /** Still frames taken on the phone; the video itself is never uploaded. */
   | { kind: 'video'; frames: string[]; filename: string }
-  | { kind: 'document'; dataUrl: string; filename: string };
+  | { kind: 'document'; dataUrl: string; filename: string }
+  /** A pasted Spotify, Apple Music, YouTube, TikTok or Instagram link. The server reads what the service shares. */
+  | { kind: 'link'; url: string };
 
 /** The full output of the new generate pass. */
 export type GeneratedIdea = {

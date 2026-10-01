@@ -231,6 +231,18 @@ async function fixtureFetch({ options, attempts, calls, aiRequests }: Session, i
     }
   }
 
+  // Pasted links: what each service publicly shares.
+  const html = (tags: Record<string, string>) => new Response(`<html><head>${Object.entries(tags).map(([k, v]) => `<meta property="${k}" content="${v}">`).join('')}</head></html>`, { headers: { 'content-type': 'text/html' } });
+  if (url.host === 'www.youtube.com' && url.pathname === '/oembed') {
+    return reply({ title: 'Superman Theme (Full Orchestra)', author_name: 'John Williams', thumbnail_url: 'https://i.ytimg.com/vi/demo/hqdefault.jpg' }, 'application/json');
+  }
+  if (url.host === 'www.tiktok.com' && url.pathname === '/oembed') {
+    return reply({ title: 'POV: you lost your friends at the festival', author_name: 'festivalfran', thumbnail_url: 'https://p16.tiktokcdn.com/demo.jpeg' }, 'application/json');
+  }
+  if (url.host === 'open.spotify.com') return html({ 'og:title': 'Kiss from a Rose', 'og:description': 'Seal · Seal II · Song · 1994', 'og:type': 'music.song', 'og:image': 'https://i.scdn.co/image/demo' });
+  if (url.host === 'www.instagram.com') return html({ 'og:title': 'Instagram' });
+  if (['i.ytimg.com', 'p16.tiktokcdn.com', 'i.scdn.co'].includes(url.host)) return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } });
+
   // Muse: Meta Model API (Responses API). Claude: matched by path, since the
   // Anthropic SDK honours ANTHROPIC_BASE_URL and the host can vary.
   const isMuse = url.host === 'api.meta.ai' && url.pathname === '/v1/responses';

@@ -2,7 +2,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { FileText, Film, Image as ImageIcon, Music } from 'lucide-react';
 import { Composer, HomeBackground, type ComposerOption } from '@/components/shell';
-import { fileToUpload, UploadError } from '@/lib/upload';
+import { fileToUpload, typedToUpload, UploadError } from '@/lib/upload';
 import type { Upload } from '../../server/lib/types.ts';
 
 const ADD_OPTIONS: ComposerOption[] = [
@@ -49,7 +49,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     <main className="home">
       <section className="hero" aria-label="Start">
         <h1><span className="line">Drop anything.</span><br /><span className="line">Get an app idea.</span></h1>
-        <p className="hero-sub">A photo, a video, a song, a document, or a few words. The app idea comes straight from what you drop in.</p>
+        <p className="hero-sub">Paste a Spotify, YouTube, TikTok or Instagram link, or drop a photo, video, song or document. The app idea comes straight from it.</p>
       </section>
       <div className="drop-row">
         {PICKERS.map((picker) => <button key={picker.id} type="button" className="btn-pill" disabled={active} onClick={() => inputs.current[picker.id]?.click()}>
@@ -64,10 +64,20 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     </main>
     <div className="dock home-dock">
       <div className="dock-stack">
-        <Composer placeholder="Or type anything…" busy={active}
+        <Composer placeholder="Paste a link or type" busy={active}
           options={ADD_OPTIONS} option="" menuTitle="Add a file"
           onOption={(id) => inputs.current[id]?.click()}
-          onSubmit={(text) => { const trimmed = text.trim(); if (trimmed) onDescribe(trimmed); }} />
+          onSubmit={(text) => {
+            if (!text.trim()) return false;
+            try {
+              const upload = typedToUpload(text);
+              setError(null);
+              if (upload.kind === 'text') onDescribe(upload.text); else onUpload(upload);
+            } catch (caught) {
+              setError(caught instanceof UploadError ? caught.message : 'That didn’t work. Try again.');
+              return false;
+            }
+          }} />
       </div>
     </div>
   </div>;
