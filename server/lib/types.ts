@@ -126,7 +126,9 @@ export type NewBlueprint = {
   /** The template id when the user steered it, or null when they skipped it. */
   templateId: string | null;
   /** Prompt 3's mode, if one was picked. */
-  mode?: GenerateMode | null;
+  mode?: GenerateMode | 'collide' | null;
+  /** Collide: the second source, by kind and label, and its research and DNA. */
+  second?: { kind: Upload['kind']; label: string; read: UploadRead };
   /** Stages 1 and 2: what the upload is and its DNA. */
   read: UploadRead;
   idea: GeneratedIdea;

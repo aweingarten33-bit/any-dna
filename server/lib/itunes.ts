@@ -140,3 +140,18 @@ export async function findSong(text: string, country = 'us'): Promise<SongFacts 
   }
   return null;
 }
+
+/**
+ * If the user's words are an app's name, its App Store listing. Only short
+ * text counts, and only when a listing's name starts with exactly those words,
+ * so a sentence or a song title doesn't match an app by accident.
+ */
+export async function findApp(text: string, country = 'us'): Promise<AppListing | null> {
+  const words = norm(text);
+  if (words.length < 3 || words.length > 40 || words.split(' ').length > 5) return null;
+  const apps = await searchApps(text, country, 5);
+  return apps.find((app) => {
+    const name = norm(app.name);
+    return name === words || name.startsWith(`${words} `);
+  }) ?? null;
+}

@@ -1,6 +1,6 @@
 // Calls to the API. Same origin in production; in development Vite forwards
 // /api to the local server (see vite.config.ts).
-import type { BusinessPlan, Competitor, CompetitorListing, GeneratedIdea, Kit, Upload, UploadRead } from '../../server/lib/types.ts';
+import type { BusinessPlan, Competitor, CompetitorListing, DnaMechanism, FilterResult, GeneratedIdea, GenerateMode, Kit, SourceResearch, Upload, UploadRead } from '../../server/lib/types.ts';
 
 const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
 
@@ -68,13 +68,15 @@ async function withUpload<T>(upload: Upload, rest: Record<string, unknown>, sign
 export const api = {
   suggest: (upload: Upload, signal?: AbortSignal) =>
     withUpload<{ output: { audiences: string[] } }>(upload, { pass: 'suggest' }, signal),
-  // The main system prompt, in the workbench's stages: 1+2 read the upload, 3 invents 3 ideas, 4 filters them.
-  read: (upload: Upload, audience: string, direction: string, signal?: AbortSignal) =>
-    withUpload<{ output: UploadRead }>(upload, { pass: 'read', audience, direction }, signal),
-  invent: (read: UploadRead, audience: string, direction: string, templateId: string | null, signal?: AbortSignal) =>
-    post<{ output: GeneratedIdea[] }>('flow-pass', { pass: 'invent', read, audience, direction, templateId }, signal),
-  filter: (ideas: GeneratedIdea[], read: UploadRead, signal?: AbortSignal) =>
-    post<{ output: GeneratedIdea[] }>('flow-pass', { pass: 'filter', ideas, read }, signal),
+  // The Any DNA prompt, one canonical prompt per step: 1 research, 2 DNA, 3 generate, 4 filter.
+  research: (upload: Upload, about: string, signal?: AbortSignal) =>
+    withUpload<{ output: SourceResearch }>(upload, { pass: 'research', about }, signal),
+  dna: (research: SourceResearch, signal?: AbortSignal) =>
+    post<{ output: DnaMechanism[] }>('flow-pass', { pass: 'dna', research }, signal),
+  generate: (input: { read: UploadRead; second?: UploadRead; audience: string; direction: string; templateId: string | null; mode: GenerateMode | 'collide' | null; feedback: FilterResult['rejected'] }, signal?: AbortSignal) =>
+    post<{ output: GeneratedIdea[] }>('flow-pass', { pass: 'generate', ...input }, signal),
+  filter: (ideas: GeneratedIdea[], signal?: AbortSignal) =>
+    post<{ output: FilterResult }>('flow-pass', { pass: 'filter', ideas }, signal),
   compete: (audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>
     post<{ competitors: Competitor[]; searched: CompetitorListing[] }>('flow-pass', { pass: 'compete', audience, idea }, signal),
   kit: (audience: string, idea: GeneratedIdea, templateId: string | null, signal?: AbortSignal) =>

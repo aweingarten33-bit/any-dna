@@ -114,7 +114,7 @@ async function songUpload(file: File): Promise<Upload> {
   const tags = await id3Tags(file).catch(() => ({} as { title?: string; artist?: string }));
   const fromName = file.name.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]+/, '').replace(/[_]+/g, ' ').trim();
   const title = tags.title || fromName || 'this song';
-  return { kind: 'text', text: `The song “${title}”${tags.artist ? ` by ${tags.artist}` : ''}` };
+  return { kind: 'text', text: `The song “${title}”${tags.artist ? ` by ${tags.artist}` : ''}`, from: 'song-file' };
 }
 
 function isVideo(file: File) {
@@ -145,7 +145,7 @@ export async function fileToUpload(file: File): Promise<Upload> {
 
 /** Short label for the upload, shown on screens that came from it. */
 export function uploadLabel(upload: Upload): string {
-  if (upload.kind === 'text' && upload.text.startsWith('The song “')) return upload.text.replace(/^The song /, '');
+  if (upload.kind === 'text' && upload.from === 'song-file') return upload.text.replace(/^The song /, '');
   if (upload.kind === 'text') return upload.text.length > 60 ? `“${upload.text.slice(0, 60)}…”` : `“${upload.text}”`;
   if (upload.kind === 'link') { const source = linkSource(upload.url); return source ? `your ${LINK_NAMES[source]} link` : 'your link'; }
   if (upload.kind === 'photo') return 'your photo';

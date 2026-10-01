@@ -136,16 +136,19 @@ const PARTS: Record<string, any> = {
   },
 };
 
-PARTS.read = {
+PARTS.research = {
   recognized: true,
-  details: ['losing your friends in a packed crowd', 'phones that can\u2019t be heard over the music', 'the moment you spot them again'],
-  meaning: 'Being part of a crowd feels great until you lose your people. The relief of finding them again is the real high.',
-  why_different: 'It is about the group, not the show.',
-  conditions: 'Loud, packed places; small groups; short windows to regroup.',
-  unknowns: ['Which venue it is'],
-  mechanics: [
-    { name: 'Signal over noise', chain: 'SEPARATED → ONE CLEAR SIGNAL → REGROUP', how_it_works: 'One simple signal cuts through when nothing else can.', why_it_works: 'It removes the need to talk or text.', needs: 'A group that splits up and wants to reunite.', transferable: 'High: any noisy, crowded place.' },
-    { name: 'Meet in the middle', chain: 'SCATTERED → SHARED POINT → TOGETHER', how_it_works: 'A meeting point fair to everyone ends the back-and-forth.', why_it_works: 'Nobody has to decide.', needs: 'People in different spots.', transferable: 'High.' },
+  core_sequence: 'A group arrives together, splits up in a packed crowd, tries to signal each other over the noise, and regroups.',
+  why_it_works: 'Being part of a crowd feels great until you lose your people. The relief of finding them again is the real high.',
+  conditions: ['Loud, packed places', 'Small groups that split up', 'Short windows to regroup'],
+  uncertainties: ['Which venue it is'],
+  source_details: ['losing your friends in a packed crowd', 'phones that can\u2019t be heard over the music', 'the moment you spot them again'],
+};
+
+PARTS.dna = {
+  mechanisms: [
+    { name: 'Signal over noise', chain: 'SEPARATED → ONE CLEAR SIGNAL → REGROUP', how_it_works: 'One simple signal cuts through when nothing else can.', why_it_works: 'It removes the need to talk or text.', needs: 'A group that splits up and wants to reunite.', transferability: 'High: any noisy, crowded place.' },
+    { name: 'Meet in the middle', chain: 'SCATTERED → SHARED POINT → TOGETHER', how_it_works: 'A meeting point fair to everyone ends the back-and-forth.', why_it_works: 'Nobody has to decide.', needs: 'People in different spots.', transferability: 'High.' },
   ],
 };
 
@@ -157,8 +160,9 @@ export const PASS_FIXTURES: Record<string, any> = {
   kit: PARTS.kit,
   plan: PARTS.plan,
   suggest: PARTS.suggest,
-  read: PARTS.read,
-  invent: { ideas: [PARTS.generate, SECOND_IDEA, THIRD_IDEA] },
+  research: PARTS.research,
+  dna: PARTS.dna,
+  generate: { ideas: [PARTS.generate, SECOND_IDEA, THIRD_IDEA] },
   // The stranger keeps the first and third, and rates the third higher.
   filter: { verdicts: [
     { index: 0, keep: true, desirability: 7, reason: 'Clear and useful.' },
@@ -169,9 +173,10 @@ export const PASS_FIXTURES: Record<string, any> = {
 
 function whichPass(system: string) {
   if (system.includes('suggest 4 to 6 audiences')) return 'suggest';
-  if (system.includes('PART 2 — Extract DNA')) return 'read';
-  if (system.includes('Return: 3 ideas. Fields for each')) return 'invent';
-  if (system.includes('seeing these product pitches for the first time')) return 'filter';
+  if (system.includes('CANONICAL PROMPT 1 — RESEARCH')) return 'research';
+  if (system.includes('CANONICAL PROMPT 2 — EXTRACT DNA')) return 'dna';
+  if (system.includes('CANONICAL PROMPT 3 — GENERATE')) return 'generate';
+  if (system.includes('CANONICAL PROMPT 4 — FILTER')) return 'filter';
   if (system.includes('content of the main screen')) return 'kit';
   if (system.includes('one-page business plan')) return 'plan';
   throw new Error('Unknown pass prompt');

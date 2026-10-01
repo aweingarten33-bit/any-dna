@@ -1,6 +1,7 @@
 // The blueprint for an idea from the new front door: the idea first, then how
 // to build it, real competitors, and the business plan on request.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { MODES } from '@/screens/newsteer';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, FileDown, RefreshCw, Sparkles } from 'lucide-react';
 import { AppIcon, Rating, Source, price } from '@/components/bits';
@@ -67,6 +68,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
 }) {
   const { audience, idea, searched, competitors, kit, plan } = blueprint;
   const template = templateById(blueprint.templateId);
+  const modeName = MODES.find((item) => item.id === blueprint.mode)?.name;
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -102,7 +104,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
   return <section className="blueprint">
     <NewPrintReport blueprint={blueprint} prompt={prompt} />
     <div className="bp-top">
-      <div className="bp-route"><span>{blueprint.upload.label}</span><ArrowRight size={13} /><span>{audience}</span></div>
+      <div className="bp-route"><span>{blueprint.upload.label}</span>{blueprint.second && <><span>×</span><span>{blueprint.second.label}</span></>}<ArrowRight size={13} /><span>{audience}</span></div>
       <nav className="segments" aria-label="Blueprint sections">
         {CARDS.map((title, i) => <button key={title} type="button" className={i < active ? 'is-past' : i === active ? 'is-on' : ''} onClick={() => go(i)} aria-label={title} aria-current={i === active}>
           <i /><span>{SHORT[i]}</span>
@@ -126,13 +128,14 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
         <h4 className="sub-head">How it works</h4>
         <ol className="steps">{idea.how_it_works.map((step, i) => <li key={i}><span>{i + 1}</span><p>{step}</p></li>)}</ol>
         <div className="killer"><span>The killer feature</span><p>{idea.killer_feature}</p></div>
-        <h4 className="sub-head">The callbacks to what you dropped in</h4>
-        <ul className="callbacks">{idea.callbacks.map((callback, i) => <li key={i}><b>{callback.detail}</b><p>{callback.meaning}</p></li>)}</ul>
+        {idea.callbacks.length > 0 && <><h4 className="sub-head">The callbacks to what you dropped in</h4>
+          <ul className="callbacks">{idea.callbacks.map((callback, i) => <li key={i}><b>{callback.detail}</b><p>{callback.meaning}</p></li>)}</ul></>}
         <dl className="stack-fields">
           <Field label="What it’s not">{idea.what_its_not}</Field>
           <Field label="Why people would keep using it">{idea.why_use}</Field>
           <Field label="Biggest risk">{idea.main_risk}</Field>
           {template && <Field label="Proven trick built in">{template.name}, like {template.sourceApp}</Field>}
+          {modeName && <Field label="Mode">{modeName}{blueprint.second ? `, with ${blueprint.second.label}` : ''}</Field>}
         </dl>
       </Panel>
 
@@ -224,19 +227,25 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
       </Panel>
 
       <Panel index={4} active={active === 4} title="Where it came from" source={null}>
-        <p className="lede">What we read in {blueprint.upload.label}, and the pattern underneath that the app is built on.</p>
-        <blockquote className="pull">{blueprint.read.meaning}</blockquote>
-        <p className="origin-why">{blueprint.read.why_different}</p>
-        <h4 className="sub-head">The details it calls back to</h4>
-        <ul className="ticks big">{blueprint.read.details.map((detail, i) => <li key={i}>{detail}</li>)}</ul>
-        <h4 className="sub-head">Its DNA, strongest first</h4>
-        <ol className="tricks">{blueprint.read.mechanics.map((mechanic, i) => <li key={i}><div>
-          <b>{mechanic.name}</b>
-          <p className="pattern-chain">{mechanic.chain.split(/\s*(?:→|->)\s*/).map((part, j, all) => <span key={j}><b>{part}</b>{j < all.length - 1 && <ArrowRight size={14} aria-hidden="true" />}</span>)}</p>
-          <p>{mechanic.how_it_works} {mechanic.why_it_works}</p>
-          <small>Needs: {mechanic.needs}</small>
-        </div></li>)}</ol>
-        {blueprint.read.unknowns.length > 0 && <dl className="stack-fields"><Field label="What it can’t tell"><ul className="ticks is-muted">{blueprint.read.unknowns.map((item) => <li key={item}>{item}</li>)}</ul></Field></dl>}
+        <p className="lede">Why {blueprint.second ? 'each source works' : `${blueprint.upload.label} works`}, and the pattern underneath that the app is built on.</p>
+        {[{ label: blueprint.upload.label, read: blueprint.read }, ...(blueprint.second ? [{ label: blueprint.second.label, read: blueprint.second.read }] : [])].map(({ label, read }, n) => <div key={n} className="origin-source">
+          {blueprint.second && <h4 className="sub-head">{label}</h4>}
+          <blockquote className="pull">{read.research.why_it_works}</blockquote>
+          <dl className="stack-fields">
+            <Field label="What happens, step by step">{read.research.core_sequence}</Field>
+            {read.research.conditions.length > 0 && <Field label="What it needs to work"><ul className="ticks">{read.research.conditions.map((item, i) => <li key={i}>{item}</li>)}</ul></Field>}
+          </dl>
+          <h4 className="sub-head">Its DNA, strongest first</h4>
+          <ol className="tricks">{read.dna.map((mechanic, i) => <li key={i}><div>
+            <b>{mechanic.name}</b>
+            {mechanic.chain && <p className="pattern-chain">{mechanic.chain.split(/\s*(?:→|->)\s*/).map((part, j, all) => <span key={j}><b>{part}</b>{j < all.length - 1 && <ArrowRight size={14} aria-hidden="true" />}</span>)}</p>}
+            <p>{mechanic.how_it_works} {mechanic.why_it_works}</p>
+            <small>Needs: {mechanic.needs}</small>
+          </div></li>)}</ol>
+          {read.research.source_details.length > 0 && <><h4 className="sub-head">Details the app can call back to</h4>
+            <ul className="ticks big">{read.research.source_details.map((detail, i) => <li key={i}>{detail}</li>)}</ul></>}
+          {read.research.uncertainties.length > 0 && <dl className="stack-fields"><Field label="What it can’t tell"><ul className="ticks is-muted">{read.research.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></Field></dl>}
+        </div>)}
         <div className="verdict-actions">
           <button type="button" className="btn-pill is-primary" onClick={onStartOver}><span>Make another one</span></button>
         </div>
@@ -262,7 +271,7 @@ function NewPrintReport({ blueprint, prompt }: { blueprint: NewBlueprint; prompt
       <h1>{idea.name}</h1>
       <p className="pr-pitch">{idea.tagline}</p>
       <dl className="pr-meta">
-        <div><dt>Inspired by</dt><dd>{blueprint.upload.label}</dd></div>
+        <div><dt>Inspired by</dt><dd>{blueprint.upload.label}{blueprint.second ? ` × ${blueprint.second.label}` : ''}</dd></div>
         <div><dt>For</dt><dd>{audience}</dd></div>
         <div><dt>Date</dt><dd>{date}</dd></div>
       </dl>
@@ -276,8 +285,8 @@ function NewPrintReport({ blueprint, prompt }: { blueprint: NewBlueprint; prompt
       <h3>How it works</h3>
       <ol className="pr-steps">{idea.how_it_works.map((step, i) => <li key={i}>{step}</li>)}</ol>
       <h3>The killer feature</h3><p>{idea.killer_feature}</p>
-      <h3>Callbacks</h3>
-      <table className="pr-table"><tbody>{idea.callbacks.map((callback, i) => <tr key={i}><th>{callback.detail}</th><td>{callback.meaning}</td></tr>)}</tbody></table>
+      {idea.callbacks.length > 0 && <><h3>Callbacks</h3>
+        <table className="pr-table"><tbody>{idea.callbacks.map((callback, i) => <tr key={i}><th>{callback.detail}</th><td>{callback.meaning}</td></tr>)}</tbody></table></>}
       <div className="pr-grid">
         <div><h3>What it’s not</h3><p>{idea.what_its_not}</p></div>
         <div><h3>Why people would use it</h3><p>{idea.why_use}</p></div>

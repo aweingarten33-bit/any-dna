@@ -3,10 +3,10 @@
 // a server job: a request waits up to 20 seconds, then answers "pending", and
 // the browser asks again and joins the same job.
 import { PassError } from './ai.ts';
-import { AppStoreError, closestCompetitors, findSong, searchCompetitors } from './itunes.ts';
-import { runAudienceSuggest, runFilter, runInvent, runKit, runPlan, runRead, type UploadInput } from './passes.ts';
-import { generateSchema, readSchema } from './schemas.ts';
-import type { NewPassName } from './types.ts';
+import { AppStoreError, closestCompetitors, findApp, findSong, searchCompetitors } from './itunes.ts';
+import { runAudienceSuggest, runDna, runFilter, runGenerate, runKit, runPlan, runResearch, type UploadInput } from './passes.ts';
+import { generateSchema, readSchema, researchSchema } from './schemas.ts';
+import type { GenerateMode, NewPassName } from './types.ts';
 import { unzipSync } from 'npm:fflate@^0.8.2';
 import { templateById } from './templates.ts';
 import { LINK_NAMES, LinkError, linkImage, readLink } from './links.ts';
@@ -117,15 +117,25 @@ function docxText(dataUrl: string): string {
     .join('\n');
 }
 
-export type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown; frames?: unknown; url?: unknown };
+export type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown; frames?: unknown; url?: unknown; from?: unknown };
 
+/** The upload as the wrapper's normalized source: what was actually available, and what wasn't. */
 async function normalizeUpload(raw: unknown): Promise<UploadInput> {
   const body = (raw ?? {}) as RawUpload;
   const filename = typeof body.filename === 'string' && body.filename.trim() ? body.filename.trim().slice(0, 120) : 'upload';
   if (body.kind === 'text') {
     const text = typeof body.text === 'string' ? body.text.trim() : '';
     if (!text) throw new HttpError(400, 'Describe what you want an app about.');
-    return { kind: 'text', text: text.slice(0, 4000), label: 'their words' };
+    if (body.from === 'song-file') {
+      return { kind: 'text', text: text.slice(0, 400), label: 'their song', packet: {
+        category: 'Video / Audio', type: 'song file',
+        provenance: 'A song file on the person\'s phone. Its title and artist were read from the file\'s tags or its file name.',
+        unavailable: ['the audio itself: it was not listened to'],
+      } };
+    }
+    return { kind: 'text', text: text.slice(0, 4000), label: 'their words', packet: {
+      category: 'Text / Conversation', type: 'words typed by the person', provenance: 'Typed by the person.', unavailable: [],
+    } };
   }
   if (body.kind === 'link') {
     const url = typeof body.url === 'string' ? body.url.trim().slice(0, 600) : '';
@@ -140,13 +150,27 @@ async function normalizeUpload(raw: unknown): Promise<UploadInput> {
       `${service} ${info.kind}: “${info.title || 'untitled'}”${info.creator ? ` by ${info.creator}` : ''}`,
       info.detail ? `Details: ${info.detail}` : '',
     ].filter(Boolean).join('\n').slice(0, 6000);
-    return { kind: 'link', text, imageDataUrl: await linkImage(info.imageUrl), label: `a ${service} ${info.kind}` };
+    const imageDataUrl = await linkImage(info.imageUrl);
+    const github = info.source === 'github';
+    return { kind: 'link', text, imageDataUrl, label: `a ${service} ${info.kind}`, packet: {
+      category: 'Link', type: `${service} ${info.kind}`, title: info.title, creator: info.creator, url,
+      provenance: github
+        ? 'Fetched from GitHub\'s public API: the repo\'s description, stars, language, topics and the start of its README.'
+        : `Fetched from ${service}'s public share preview: the title, creator${info.detail ? ', a short description' : ''}${imageDataUrl ? ' and the cover image' : ''}.`,
+      unavailable: github
+        ? ['the code itself: it was not read', 'the rest of the README']
+        : [`the ${info.kind} itself: it was not ${info.kind === 'video' ? 'watched' : info.kind === 'post' ? 'opened' : 'listened to'}; only its share preview was fetched`],
+    } };
   }
   if (body.kind === 'video') {
     const frames = Array.isArray(body.frames) ? body.frames.filter((frame): frame is string => typeof frame === 'string').slice(0, 6) : [];
     if (!frames.length || frames.some((frame) => !/^data:image\/(jpeg|png|webp);base64,/.test(frame))) throw new HttpError(400, 'That video arrived broken. Try again.');
     if (frames.reduce((total, frame) => total + dataUrlBytes(frame), 0) > MAX_UPLOAD_BYTES) throw new HttpError(400, 'That video is too big. Try a shorter one.');
-    return { kind: 'video', frames, label: filename };
+    return { kind: 'video', frames, label: filename, packet: {
+      category: 'Video / Audio', type: 'video from the person\'s phone', title: filename,
+      provenance: `${frames.length} still frames taken from across the video on the person's phone.`,
+      unavailable: ['the sound', 'the motion between the frames'],
+    } };
   }
   const dataUrl = typeof body.dataUrl === 'string' ? body.dataUrl : '';
   if (!dataUrl.startsWith('data:')) throw new HttpError(400, 'That upload arrived broken. Try again.');
@@ -156,18 +180,48 @@ async function normalizeUpload(raw: unknown): Promise<UploadInput> {
     if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'].includes(mime)) {
       throw new HttpError(400, 'That photo is in a format we cannot read. Try a JPEG or PNG.');
     }
-    return { kind: 'photo', dataUrl, label: filename };
+    return { kind: 'photo', dataUrl, label: filename, packet: {
+      category: 'Image', type: 'photo', title: filename, provenance: 'Uploaded by the person (resized on their phone).', unavailable: [],
+    } };
   }
   if (body.kind === 'document') {
-    if (mime === 'application/pdf') return { kind: 'pdf', dataUrl, label: filename };
+    if (mime === 'application/pdf') {
+      return { kind: 'pdf', dataUrl, label: filename, packet: {
+        category: 'Document / Data', type: 'PDF', title: filename, provenance: 'Uploaded by the person; the whole file is attached.', unavailable: [],
+      } };
+    }
     if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const text = docxText(dataUrl);
       if (!text.trim()) throw new HttpError(400, 'We could not read any text from that Word document.');
-      return { kind: 'text', text: text.slice(0, 20000), label: `the document "${filename}"` };
+      const cut = text.length > 20000;
+      return { kind: 'text', text: text.slice(0, 20000), label: `the document "${filename}"`, packet: {
+        category: 'Document / Data', type: 'Word document', title: filename,
+        provenance: 'Uploaded by the person. Its text was extracted on the server.',
+        unavailable: ['its images and formatting', ...(cut ? ['the text after the first 20,000 characters'] : [])],
+      } };
     }
     throw new HttpError(400, 'That document is in a format we cannot read. Try a PDF or Word document.');
   }
   throw new HttpError(400, 'Tell us what you uploaded: a photo, a video, a document, or words.');
+}
+
+/**
+ * Live research for publicly researchable sources, gathered before Prompt 1:
+ * a song's Apple Music facts, and an app's App Store listing when the words are its name.
+ * A failed lookup just means no facts.
+ */
+async function gatherResearch(upload: UploadInput, country: string): Promise<UploadInput> {
+  const songText = upload.kind === 'text' ? upload.text : upload.kind === 'link' && / song: /.test(upload.text) ? `${upload.text.split('\n')[0]} song` : '';
+  const appText = upload.kind === 'text' && upload.packet.type === 'words typed by the person' ? upload.text : '';
+  const [song, app] = await Promise.all([
+    songText ? findSong(songText, country).catch(() => null) : null,
+    appText ? findApp(appText, country).catch(() => null) : null,
+  ]);
+  const facts = [
+    song ? `Apple Music lists this song (fetched): "${song.track}" by ${song.artist}${song.album ? `, from ${song.album}` : ''}${song.genre ? `, ${song.genre}` : ''}${song.year ? `, ${song.year}` : ''}.` : '',
+    app ? `An App Store app has this name (fetched; the person may mean it, or something else with the same name): "${app.name}" by ${app.developer}, ${app.category}, ${app.formatted_price || 'price unknown'}, rated ${app.rating ?? 'unknown'} from ${app.rating_count?.toLocaleString('en-US') ?? 'unknown'} ratings. Its description: ${app.description.slice(0, 1500)}` : '',
+  ].filter(Boolean);
+  return facts.length ? { ...upload, packet: { ...upload.packet, facts } } : upload;
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -187,10 +241,10 @@ export function uploadFingerprintSource(raw: RawUpload): string {
 /** Asked to check on a step that needs the upload, but the server doesn't have that step (it restarted): resend it. */
 class NeedUpload extends Error {}
 
-/** A job key from the request body, without the megabytes of upload bytes. Only suggest and read read the upload. */
+/** A job key from the request body, without the megabytes of upload bytes. Only suggest and research read the upload. */
 async function flowKey(pass: string, body: Record<string, unknown>): Promise<string> {
   let uploadRef: string | null = null;
-  if (pass === 'suggest' || pass === 'read') {
+  if (pass === 'suggest' || pass === 'research') {
     const claimed = typeof body.uploadRef === 'string' && /^[0-9a-f]{64}$/.test(body.uploadRef) ? body.uploadRef : null;
     if (body.upload) {
       uploadRef = await sha256Hex(uploadFingerprintSource(body.upload as RawUpload));
@@ -208,12 +262,28 @@ async function flowKey(pass: string, body: Record<string, unknown>): Promise<str
 
 function readOf(value: unknown) {
   const parsed = readSchema.safeParse(value);
-  if (!parsed.success) throw new HttpError(400, 'This step needs the reading from the first step.');
+  if (!parsed.success) throw new HttpError(400, 'This step needs the research and DNA from the first steps.');
   return parsed.data;
 }
 
+function researchOf(value: unknown) {
+  const parsed = researchSchema.safeParse(value);
+  if (!parsed.success) throw new HttpError(400, 'This step needs the research from the first step.');
+  return parsed.data;
+}
+
+const MODES: Array<GenerateMode | 'collide'> = ['repurpose', 'x1000', 'future', 'angle', 'collide'];
+
+function feedbackOf(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  return value.slice(0, 12).flatMap((item) => {
+    const { name, reason } = (item ?? {}) as Record<string, unknown>;
+    return typeof name === 'string' && typeof reason === 'string' ? [{ name: name.slice(0, 80), reason: reason.slice(0, 300) }] : [];
+  });
+}
+
 function ideasOf(value: unknown) {
-  if (!Array.isArray(value) || !value.length) throw new HttpError(400, 'This step needs the ideas from the invent step.');
+  if (!Array.isArray(value) || !value.length) throw new HttpError(400, 'This step needs the ideas from the generate step.');
   return value.slice(0, 3).map(generatedIdeaOf);
 }
 
@@ -236,7 +306,7 @@ function toKitIdea(idea: ReturnType<typeof generatedIdeaOf>, audience: string) {
   };
 }
 
-const FLOW_PASSES: NewPassName[] = ['suggest', 'read', 'invent', 'filter', 'compete', 'kit', 'plan'];
+const FLOW_PASSES: NewPassName[] = ['suggest', 'research', 'dna', 'generate', 'filter', 'compete', 'kit', 'plan'];
 
 /** An audience the user typed goes inside prompts: plain words only. */
 function audienceOf(value: unknown) {
@@ -245,24 +315,27 @@ function audienceOf(value: unknown) {
 
 async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Promise<unknown> {
   const country = countryOf(body.country);
-  const audience = pass === 'suggest' || pass === 'filter' ? '' : audienceOf(body.audience);
+  const audience = ['suggest', 'research', 'dna', 'filter'].includes(pass) ? '' : audienceOf(body.audience);
   const templateId = typeof body.templateId === 'string' && body.templateId ? body.templateId.slice(0, 40) : undefined;
   const direction = typeof body.direction === 'string' && body.direction.trim() ? body.direction.trim().slice(0, 600) : undefined;
 
-  if (pass === 'suggest' || pass === 'read') {
+  if (pass === 'suggest' || pass === 'research') {
     const upload = await normalizeUpload(body.upload);
     if (pass === 'suggest') return { output: await runAudienceSuggest(upload) };
-    // Typed words that name a song get real facts from Apple Music. A failed lookup just means no facts.
-    const songText = upload.kind === 'text' ? upload.text : upload.kind === 'link' && / song: /.test(upload.text) ? `${upload.text.split('\n')[0]} song` : '';
-    const song = songText ? await findSong(songText, country).catch(() => null) : null;
-    return { output: await runRead(upload, audience, direction, song) };
+    const about = typeof body.about === 'string' && body.about.trim() ? body.about.trim().slice(0, 600) : undefined;
+    return { output: await runResearch(await gatherResearch(upload, country), about) };
   }
-  if (pass === 'invent') return { output: await runInvent(readOf(body.read), audience, direction, templateId) };
+  if (pass === 'dna') return { output: await runDna(researchOf(body.research)) };
+  if (pass === 'generate') {
+    const mode = MODES.find((item) => item === body.mode);
+    const second = mode === 'collide' ? readOf(body.second) : undefined;
+    return { output: await runGenerate({ read: readOf(body.read), second, audience, direction, templateId, mode, feedback: feedbackOf(body.feedback) }) };
+  }
   if (pass === 'filter') {
-    // The stranger's "already exists" check gets real App Store results for each idea, not memory.
+    // Real App Store results for each idea, before the "already exists" judgment.
     const ideas = ideasOf(body.ideas);
     const found = await Promise.all(ideas.map((idea) => searchCompetitors(idea.search_terms, country, '').catch(() => [])));
-    return { output: await runFilter(ideas, readOf(body.read), found) };
+    return { output: await runFilter(ideas, found) };
   }
 
   const idea = generatedIdeaOf(body.idea);
@@ -285,7 +358,7 @@ export function flowPass(req: Request, admit: () => string | null = () => null):
     // A failure is told once, then forgotten, so "Try again" starts fresh.
     if (job?.outcome && !job.outcome.ok && Date.now() - job.endedAt! > 2 * 60 * 1000) job = undefined;
     if (!job) {
-      if ((pass === 'suggest' || pass === 'read') && !body.upload) throw new NeedUpload();
+      if ((pass === 'suggest' || pass === 'research') && !body.upload) throw new NeedUpload();
       // Only AI steps count against the limit.
       const limited = pass === 'compete' ? null : admit();
       if (limited) throw new HttpError(429, limited);

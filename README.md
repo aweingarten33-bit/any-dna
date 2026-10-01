@@ -6,8 +6,8 @@ Drop anything (a photo, a video, a song, a document, or a few words), say who it
 
 1. **Drop anything.** A pasted Spotify, Apple Music, YouTube, TikTok, Instagram or GitHub link, a photo, video (4 still frames are taken on the phone), song (its title and artist are read from the file), PDF, Word doc, or typed words such as a song title.
 2. **Who's it for.** Suggested audiences for the upload, a free-text option, and an optional "Anything else?" box for the niche or the feel.
-3. **Add a proven trick?** Optional templates, each a trick from a real app (a countdown like Too Good To Go, a map like Find My, a streak like Duolingo...), shown with a preview of the screen it makes.
-4. **Inventing your app.** The main system prompt runs in the four workbench stages (below). What each stage finds appears as it lands. If the upload names a song or film the AI doesn't actually know, it asks the user what it's about instead of guessing.
+3. **How should it think?** An optional mode (Repurpose, ×1000, 30 years from now, Different angle, or Collide with a second source), and optional templates, each a trick from a real app (a countdown like Too Good To Go, a map like Find My, a streak like Duolingo...), shown with a preview of the screen it makes.
+4. **Inventing your app.** The four canonical prompts run in order (below). What each stage finds appears as it lands. If the upload names a song or film the AI doesn't actually know, it asks the user what it's about instead of guessing.
 5. **Pick your app** from the ideas that passed.
 6. **The blueprint:** the idea (the pattern underneath, how it works, the killer feature, the callbacks to the upload), Build it (a phone mockup in the template's layout, first-version features, a copy-paste build prompt, links to Lovable, Bolt, Replit, Claude Code and Cursor, a four-week plan), real App Store competitors, a business plan on request, and where it came from. Save as PDF prints a paper-styled report.
 
@@ -15,15 +15,16 @@ Ideas are saved on the device. Uploads are never stored.
 
 ## The main system prompt
 
-It follows the owner's four workbench prompts, worded as close to the originals as the change of subject (an upload instead of a product) allows. The full text is in `server/lib/passes.ts`.
+The owner's **Any DNA** prompt, word for word, in `server/lib/prompts.ts`: an outer wrapper, the four canonical Workbench prompts, the mode instructions and side rules. The app's own additions sit beside them in `server/lib/prompt-additions.ts`. See `docs/PROMPTS.md` for exactly what each step sends.
 
-| Stage | Call | What it does |
+| Step | Prompt | What it does |
 |---|---|---|
-| 1 Research + 2 Extract DNA | `read` | What the upload really is and means, then 3–4 transferable mechanics, strongest first |
-| 3 Generate | `invent` | 6 private candidates, keep the best 3, with the original hard rejections and must-haves plus a callback rule |
-| 4 Filter | `filter` | The blunt-stranger checks plus a resemblance check, using real App Store search results for "already exists". Only kept ideas are shown; the verdicts never are |
+| `research` | Canonical Prompt 1 | Why the source works: the core loop, why it works, its conditions, the unknowns, plus 3–6 source details for callbacks |
+| `dna` | Canonical Prompt 2 | 3–4 transferable mechanics, strongest first |
+| `generate` | Canonical Prompt 3 + the mode | The best 3 ideas for the audience, in the picked mode (Repurpose, ×1000, 30 Years From Now, Different Angle, Collide) |
+| `filter` | Canonical Prompt 4 | A blunt stranger keeps or rejects each idea, using real App Store search results. If all fail, the app generates again with the reasons, up to 2 times, then says honestly that nothing passed |
 
-Everything the user typed or uploaded goes inside `<upload>` tags, with a rule that it is material to read, never instructions.
+Source contents go inside `<source>` tags and are treated as material, never instructions. The AI is told exactly what was and wasn't available (for example, that a song's audio was never heard).
 
 Real data: competitors, prices and ratings come from Apple's App Store search; song facts come from Apple Music search. The AI never supplies them.
 
@@ -52,7 +53,7 @@ One **web service** (Node runtime):
 |---|---|---|---|
 | `META_MODEL_API_KEY` | **yes** | | Muse key from the Meta Model API |
 | `META_MODEL` | no | `muse-spark-1.3` | Muse model (standard tier only) |
-| `AI_CALLS_PER_HOUR` | no | `60` | Per visitor (a run is about 5 calls) |
+| `AI_CALLS_PER_HOUR` | no | `60` | Per visitor (a run is about 6 calls; up to 12 with retries or Collide) |
 | `AI_CALLS_PER_DAY` | no | `1000` | Across all visitors |
 | `GITHUB_TOKEN` | no | | Raises GitHub's limit for reading pasted repos (60 an hour without it). Any token, no scopes needed |
 
