@@ -11,7 +11,7 @@ import { structuredCall } from './ai.ts';
 import { audienceSuggestSchema, buildSchema, dissectSchema, filterSchema, gapsModelSchema, inventSchema, kitSchema, planSchema, readSchema } from './schemas.ts';
 import type { AppListing, BusinessPlan, CompetitorListing, Dissect, Gaps, GeneratedIdea, Idea, Kit, Review } from './types.ts';
 import type { UserContent } from './ai.ts';
-import { templateById } from './templates.ts';
+import { templateById, type PhoneLayout } from './templates.ts';
 import type { z } from 'npm:zod@^4.1.0';
 
 const RULES = `You are one step in Spinoff. Spinoff takes an app that already works and turns what makes it work into a new app for a different group of people.
@@ -194,7 +194,15 @@ function ideaBlock(idea: KitIdea, audience: string) {
 
 // ---- kit: what the main screen shows, and a build plan ------------------
 
-export async function runKit(idea: KitIdea, audience: string): Promise<Kit> {
+const LAYOUT_NOTES: Record<PhoneLayout, string> = {
+  list: '',
+  countdown: 'This screen is a countdown layout: hero_value is the time left (like "42 min" or "3:18"), hero_label says what ends, and each card is an offer with its price or current bid in tag.',
+  map: 'This screen is a map layout: the cards are people or places shown as pins on a map, hero_value is a short count (like "3"), hero_label says what is counted, and each tag is a distance or a time.',
+  streak: 'This screen is a big-number layout: hero_value is one number (like "23"), hero_label says what it counts (like "day streak"), and only the first 2 cards show.',
+  swipe: 'This screen is a swipe-deck layout: the cards are options to pass or pick, the first one is shown large with its detail as a short description, and each tag is a distance, price or time.',
+};
+
+export async function runKit(idea: KitIdea, audience: string, layout: PhoneLayout = 'list'): Promise<Kit> {
   const kit = await structuredCall({
     schema: kitSchema,
     effort: 'low',
@@ -212,6 +220,7 @@ screen (this fills a designed phone mockup, so keep every piece short and real, 
 - primary_action: the main button, 1 to 3 words, starting with a verb, like "Log a walk".
 - cards: exactly 3 realistic items someone would see on this screen. title 2 to 5 words, detail under 8 words, tag 1 or 2 words (a status, time or price).
 - tabs: exactly 4 tab names for the bottom bar, 1 word each, the first being this screen.
+${LAYOUT_NOTES[layout]}
 
 plan: 4 steps to build and test the first version, for one person using an AI app builder.
 - when: like "Week 1".

@@ -8,6 +8,7 @@ import { getLowStarReviews, reviewProvider } from './reviews.ts';
 import { generateSchema, ideaSchema, readSchema } from './schemas.ts';
 import type { AppListing, NewPassName, PassName, Review, ReviewsSummary } from './types.ts';
 import { unzipSync } from 'npm:fflate@^0.8.2';
+import { templateById } from './templates.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -367,7 +368,7 @@ async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Pro
 
   const idea = generatedIdeaOf(body.idea);
   const kitIdea = toKitIdea(idea, audience);
-  if (pass === 'kit') return { output: await runKit(kitIdea, audience) };
+  if (pass === 'kit') return { output: await runKit(kitIdea, audience, templateById(templateId)?.layout) };
   const searched = await searchCompetitors(idea.search_terms, country, '');
   if (pass === 'plan') return { output: await runPlan(kitIdea, audience, closestCompetitors(searched, 8)) };
   // compete: App Store search in plain code, no AI.

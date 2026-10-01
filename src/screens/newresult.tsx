@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, FileDown, RefreshCw, Sparkles } from 'lucide-react';
 import { AppIcon, Rating, Source, price } from '@/components/bits';
-import { PhoneMockup, PhoneSkeleton } from '@/components/mockup';
+import { PhoneMockup, PhoneSkeleton, layoutFor } from '@/components/mockup';
 import { api } from '@/lib/api';
 import { BUILDERS, CODE_TOOLS, newBuildPrompt } from '@/lib/build-prompt';
 import type { NewBlueprint } from '../../server/lib/types.ts';
@@ -74,7 +74,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
   const latest = useRef(blueprint);
   latest.current = blueprint;
 
-  const kitRun = useExtra(kit, (signal) => api.flowKit(audience, idea, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, kit: value }), true);
+  const kitRun = useExtra(kit, (signal) => api.flowKit(audience, idea, blueprint.templateId, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, kit: value }), true);
   const planRun = useExtra(plan, (signal) => api.flowPlan(audience, idea, signal).then((r) => r.output), (value) => onUpdate({ ...latest.current, plan: value }), false);
 
   useEffect(() => {
@@ -140,7 +140,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
       <Panel index={1} active={active === 1} title="Build it" source={<Source />}>
         <p className="lede">What the first screen could look like, and how to build it this week.</p>
         <div className="phone-stage">
-          {kit ? <PhoneMockup name={idea.name} screen={kit.screen} /> : kitRun.state === 'failed'
+          {kit ? <PhoneMockup name={idea.name} screen={kit.screen} layout={layoutFor(blueprint.templateId)} /> : kitRun.state === 'failed'
             ? <div className="extra-failed"><p>{kitRun.error}</p><button type="button" className="btn-pill" onClick={kitRun.start}><span>Try again</span><RefreshCw size={16} /></button></div>
             : <PhoneSkeleton />}
         </div>
@@ -290,7 +290,7 @@ function NewPrintReport({ blueprint, prompt }: { blueprint: NewBlueprint; prompt
     <section className="pr-section pr-break">
       <h2><span>02</span>Build it</h2>
       <div className="pr-build">
-        {kit && <div className="pr-phone"><PhoneMockup name={idea.name} screen={kit.screen} /></div>}
+        {kit && <div className="pr-phone"><PhoneMockup name={idea.name} screen={kit.screen} layout={layoutFor(blueprint.templateId)} /></div>}
         <div>
           <h3>First version</h3>
           <ol className="pr-steps">{idea.mvp.map((item, i) => <li key={i}>{item}</li>)}</ol>

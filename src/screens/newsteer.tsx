@@ -3,7 +3,8 @@
 import { useState, type CSSProperties } from 'react';
 import { ArrowBigUp, ArrowRight, Camera, Check, Flame, Footprints, Gavel, Heart, MapPin, Puzzle, Receipt, Route, ScanSearch, Sparkles, Timer, Users, type LucideIcon } from 'lucide-react';
 import { Screen } from '@/components/bits';
-import { TEMPLATES } from '../../server/lib/templates.ts';
+import { TEMPLATES, type Template } from '../../server/lib/templates.ts';
+import { PhoneMockup } from '@/components/mockup';
 
 /** A picture for each template, like Videoleap's template thumbnails. */
 const LOOKS: Record<string, { icon: LucideIcon; from: string; to: string }> = {
@@ -22,11 +23,11 @@ const LOOKS: Record<string, { icon: LucideIcon; from: string; to: string }> = {
   'race-strangers': { icon: Route, from: '#ff8a3d', to: '#e2531b' },
 };
 
-function Thumb({ id }: { id: string }) {
-  const look = LOOKS[id] ?? { icon: Sparkles, from: '#4f86ff', to: '#8b5cf6' };
-  const Icon = look.icon;
-  return <span className="tpl-thumb" style={{ '--a': look.from, '--b': look.to } as CSSProperties} aria-hidden="true">
-    <i /><i /><Icon size={30} strokeWidth={2} />
+/** A real preview of the screen this template makes, with sample content (like Videoleap's thumbnails). */
+function Thumb({ template }: { template: Template }) {
+  const look = LOOKS[template.id] ?? { icon: Sparkles, from: '#4f86ff', to: '#8b5cf6' };
+  return <span className="tpl-preview" style={{ '--a': look.from, '--b': look.to } as CSSProperties} aria-hidden="true">
+    <PhoneMockup name={template.name} screen={template.sample} layout={template.layout} />
   </span>;
 }
 
@@ -51,7 +52,7 @@ export function NewSteer({ initial, onPick }: { initial: string | null; onPick: 
       {TEMPLATES.map((template, i) => <li key={template.id} className="fade" style={{ '--d': `${300 + i * 35}ms` } as CSSProperties}>
         <button type="button" role="radio" aria-checked={picked === template.id} className={`tpl-card${picked === template.id ? ' is-on' : ''}`}
           onClick={() => setPicked(picked === template.id ? null : template.id)}>
-          <Thumb id={template.id} />
+          <Thumb template={template} />
           <span className="tpl-top"><small>Like {template.sourceApp}</small><span className="tpl-tick" aria-hidden="true"><Check size={14} strokeWidth={3} /></span></span>
           <b>{template.name}</b>
           <p>{template.trick}</p>

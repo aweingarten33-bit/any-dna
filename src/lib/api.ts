@@ -80,8 +80,8 @@ export const api = {
     post<{ output: GeneratedIdea[] }>('flow-pass', { pass: 'filter', ideas, read }, signal),
   flowCompete: (audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>
     post<{ competitors: Competitor[]; searched: CompetitorListing[] }>('flow-pass', { pass: 'compete', audience, idea }, signal),
-  flowKit: (audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>
-    post<{ output: Kit }>('flow-pass', { pass: 'kit', audience, idea }, signal),
+  flowKit: (audience: string, idea: GeneratedIdea, templateId: string | null, signal?: AbortSignal) =>
+    post<{ output: Kit }>('flow-pass', { pass: 'kit', audience, idea, templateId }, signal),
   flowPlan: (audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>
     post<{ output: BusinessPlan }>('flow-pass', { pass: 'plan', audience, idea }, signal),
 };
