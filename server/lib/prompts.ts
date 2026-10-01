@@ -16,6 +16,7 @@ Use only supplied or verified research. Identify:
 - key uncertainties
 
 Separate facts from explanation. Never invent evidence.
+Write the explanation of why it works as one short, everyday-English sentence a normal person would immediately understand. No jargon.
 Do not generate ideas yet.`;
 
 export const PROMPT_2_EXTRACT_DNA = `2. EXTRACT DNA
@@ -26,7 +27,9 @@ Strip the source name, brand, category, characters, themes, imagery, and surface
 
 Each mechanism must still work in a completely different domain.
 
-Put the strongest first.`;
+Put the strongest first.
+
+For anything shown to the user, use normal everyday English. Name each idea simply and explain it in one short sentence. No jargon, arrows, theory-speak, or AI language.`;
 
 /** Prompt 3 before its mode slot. */
 export const PROMPT_3_GENERATE = `3. GENERATE
@@ -106,4 +109,4 @@ export const SIDE_RULE_FAILED_FILTER = `If every idea fails, application code re
 
 export const SIDE_RULE_NAMING = `Do not use real or trademarked names as the generated app brand when that would cause confusion.`;
 
-export const SIDE_RULE_WRITING = `Write normal, concrete, concise product language. Prefer specific software behavior over metaphor, mood, or hype.`;
+export const SIDE_RULE_WRITING = `Write like a normal person explaining something to another normal person. Be concrete, concise and specific. Prefer plain words and specific software behavior over jargon, metaphor, mood, theory, or hype.`;
