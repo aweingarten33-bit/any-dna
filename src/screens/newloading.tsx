@@ -1,5 +1,5 @@
 // Inventing the app, one step per canonical prompt. What each step finds shows
-// up as soon as it's done: why the source works, then its DNA. Ideas are never
+// up as soon as it's done: the source DNA, then the ideas. Ideas are never
 // shown before the stranger has passed them; if none pass after every try,
 // this screen says so and offers what to change.
 import { useEffect, useState, type CSSProperties } from 'react';
@@ -78,8 +78,7 @@ export function NewLoading({ upload, second, audience, direction, templateId, mo
         <p className="find-quote">The stranger turned down {progress.rejectedCount === 1 ? 'the last idea' : `all ${progress.rejectedCount} ideas so far`}. Inventing new ones, using their reasons.</p>
       </article>}
       {[progress.read, progress.secondRead].map((read, i) => read && <article key={i} className="find is-dna">
-        <p className="find-k">{progress.secondRead ? `Why ${uploadLabel(i ? second! : upload)} works` : 'Why it works'}</p>
-        <p className="find-quote">{read.research.why_it_works}</p>
+        <p className="find-k">{progress.secondRead ? `${uploadLabel(i ? second! : upload)} DNA` : 'DNA'}</p>
         <ol className="find-tricks">{read.dna.map((mechanic) => <li key={mechanic.name}><b>{mechanic.name}</b><span>{mechanic.chain}</span></li>)}</ol>
       </article>)}
     </section>}
@@ -107,7 +106,7 @@ export function NewLoading({ upload, second, audience, direction, templateId, mo
       </div>
     </section>}
     {error ? <p className="flow-error" role="alert">{error}</p>
-      : slow ? <p className="screen-note" role="status">Still thinking. It works out why your upload works before it invents anything, which can take a minute. You can lock your phone; it picks up where it left off.</p>
-      : <p className="screen-note">It works out why your upload works, pulls out the pattern underneath, invents 3 apps, and keeps only the ones a stranger would get and want.</p>}
+      : slow ? <p className="screen-note" role="status">Still working…</p>
+      : <p className="screen-note">Finding the DNA, inventing 3 apps, then checking them.</p>}
   </Screen>;
 }
