@@ -8,7 +8,7 @@
 // Competitors are found in plain code (itunes.ts), not by the AI.
 // Everything is written for a normal person: see WRITING.
 import { structuredCall } from './ai.ts';
-import { audienceSuggestSchema, buildSchema, dissectSchema, gapsModelSchema, generateSchema, headlineSchema, kitSchema, planSchema } from './schemas.ts';
+import { audienceSuggestSchema, buildSchema, dissectSchema, gapsModelSchema, generateSchema, kitSchema, planSchema } from './schemas.ts';
 import type { AppListing, BusinessPlan, CompetitorListing, Dissect, Gaps, Idea, Kit, Review } from './types.ts';
 import type { UserContent } from './ai.ts';
 import { templateById } from './templates.ts';
@@ -25,8 +25,9 @@ Rules:
 const NEW_RULES = `You are one step in Spinoff. Spinoff turns what a person uploads — a photo, a document, a song, a video, or their own words — into a new app idea inspired by it.
 
 Rules:
-- Use only the data supplied in this message. Never invent facts, apps, prices, numbers or market claims.
-- Unknown is a correct answer. If the data doesn't show something, say so instead of guessing.`;
+- Use what was uploaded. For well-known works the user names (a famous song, film, book, painting or place), you may use what is widely known about them: what they're about, how they sound or feel. Never invent facts about them, and never make claims about private people.
+- Never invent apps, prices, numbers or market claims.
+- Unknown is a correct answer. If you don't know something, say so instead of guessing.`;
 
 /** How every pass writes. The readers are normal people, not product managers. */
 const WRITING = `How to write:
@@ -310,30 +311,6 @@ Your job: look at what the user uploaded and suggest 4 to 6 audiences who would 
   return { audiences: audiences.map((audience) => audience.trim()).filter(Boolean).slice(0, 6) };
 }
 
-// ---- headline: the name and tagline, fast -----------------------------------
-
-export async function runHeadline(upload: UploadInput, audience: string): Promise<{ name: string; tagline: string }> {
-  const headline = await structuredCall({
-    schema: headlineSchema,
-    effort: 'low',
-    system: `${NEW_RULES}
-
-${WRITING}
-
-You are an inventor. The user uploaded something and named an audience: ${audience}. Name the app they would build from it.
-
-Read the upload literally and figuratively: what is actually in it, and what does it mean underneath — the feeling, the story, the tension, the change? Go past the obvious theme. Find the small, specific thing that makes it interesting, not the general topic.
-
-Then name the product:
-- name: short and memorable, 1 to 3 words. ${namesRule()}
-- tagline: one sentence, under 15 words. What it does for whom. A friend should get it instantly.
-
-${PEOPLE_RULE}`,
-    user: uploadContent(upload, `${uploadLead(upload)}\n\nAudience: ${audience}\n\nName the app.`),
-  });
-  return { name: headline.name.trim(), tagline: headline.tagline.trim() };
-}
-
 // ---- generate: the full blueprint --------------------------------------------
 
 const EXAMPLES = `Two examples of the quality wanted. Match their depth. Never reuse their names, words or ideas; every upload must produce its own pattern.
@@ -355,7 +332,6 @@ Example 2: the Superman theme music → TAKEOFF
 export async function runGenerate(
   upload: UploadInput,
   audience: string,
-  headline: { name: string; tagline: string },
   templateId?: string,
 ): Promise<z.infer<typeof generateSchema>> {
   const template = templateById(templateId);
@@ -384,11 +360,11 @@ ${EXAMPLES}
 
 ${PEOPLE_RULE}
 
-The name and tagline are decided — keep them exactly: "${headline.name}" / "${headline.tagline}".
+Name the app only after steps 1 to 6, so the name comes from the idea.
 
 Fields:
-- name: exactly "${headline.name}".
-- tagline: exactly "${headline.tagline}".
+- name: short and memorable, 1 to 3 words. ${namesRule()}
+- tagline: one sentence, under 15 words. What it does for whom. A friend should get it instantly.
 - what_it_is: 2 or 3 sentences. What the app really is.
 - pattern: the chain, like GRAY STATE → SMALL THING ENTERS → PERCEPTION CHANGES → YOU WANT TO KNOW WHY.
 - job: one sentence a normal person gets immediately.
@@ -399,13 +375,14 @@ Fields:
 - why_use: why people would use it more than once. One or two sentences.
 - mvp: 3 to 5 features for the first version, a few words each.
 - monetization: how it makes money, one or two sentences. Don't state market prices: you have no price data.
+- main_risk: the most likely reason it fails, one sentence.
 - search_terms: 3 or 4 short phrases someone in this audience would type into the App Store to find an app that does this job. Not the product name.`,
     user: uploadContent(upload, `${uploadLead(upload)}\n\nAudience: ${audience}${steer}\n\nWrite the full blueprint.`),
   });
   return {
     ...generated,
-    name: headline.name,
-    tagline: headline.tagline,
+    name: generated.name.trim(),
+    tagline: generated.tagline.trim(),
     how_it_works: generated.how_it_works.map((step) => step.trim()).filter(Boolean).slice(0, 5),
     callbacks: generated.callbacks.slice(0, 5),
     mvp: generated.mvp.map((item) => item.trim()).filter(Boolean).slice(0, 5),

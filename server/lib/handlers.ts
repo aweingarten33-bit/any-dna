@@ -3,7 +3,7 @@
 import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
 import { PassError } from './ai.ts';
 import { AppStoreError, closestCompetitors, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
-import { runAudienceSuggest, runBuild, runDissect, runGaps, runGenerate, runHeadline, runKit, runPlan, type UploadInput } from './passes.ts';
+import { runAudienceSuggest, runBuild, runDissect, runGaps, runGenerate, runKit, runPlan, type UploadInput } from './passes.ts';
 import { getLowStarReviews, reviewProvider } from './reviews.ts';
 import { generateSchema, ideaSchema } from './schemas.ts';
 import type { AppListing, NewPassName, PassName, Review, ReviewsSummary } from './types.ts';
@@ -310,22 +310,14 @@ async function sha256Hex(input: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** A job key from the request body, without the megabytes of upload bytes. */
+/** A job key from the request body, without the megabytes of upload bytes. Only suggest and generate read the upload. */
 async function flowKey(pass: string, body: Record<string, unknown>): Promise<string> {
   const raw = (body.upload ?? {}) as RawUpload;
-  const uploadRef = typeof raw.dataUrl === 'string'
-    ? await sha256Hex(`${raw.kind}:${raw.dataUrl}`)
-    : await sha256Hex(`${raw.kind}:${typeof raw.text === 'string' ? raw.text : ''}`);
+  const uploadRef = pass === 'suggest' || pass === 'generate'
+    ? await sha256Hex(`${raw.kind}:${typeof raw.dataUrl === 'string' ? raw.dataUrl : typeof raw.text === 'string' ? raw.text : ''}`)
+    : null;
   const ideaRef = body.idea ? await sha256Hex(JSON.stringify(body.idea)) : null;
-  return JSON.stringify([pass, uploadRef, body.audience ?? null, body.headline ?? null, body.templateId ?? null, ideaRef, body.country ?? 'us']);
-}
-
-function headlineOf(value: unknown): { name: string; tagline: string } {
-  const headline = (value ?? {}) as { name?: unknown; tagline?: unknown };
-  const name = typeof headline.name === 'string' ? headline.name.trim().slice(0, 120) : '';
-  const tagline = typeof headline.tagline === 'string' ? headline.tagline.trim().slice(0, 200) : '';
-  if (!name || !tagline) throw new HttpError(400, 'headline needs the name and tagline from the headline step');
-  return { name, tagline };
+  return JSON.stringify([pass, uploadRef, pass === 'suggest' ? null : body.audience ?? null, pass === 'generate' ? body.templateId ?? null : null, ideaRef, body.country ?? 'us']);
 }
 
 function generatedIdeaOf(value: unknown) {
@@ -343,22 +335,21 @@ function toKitIdea(idea: ReturnType<typeof generatedIdeaOf>, audience: string) {
     how_it_works: idea.how_it_works,
     mvp: idea.mvp,
     monetization: idea.monetization,
-    main_risk: '',
+    main_risk: idea.main_risk,
   };
 }
 
-const FLOW_PASSES: NewPassName[] = ['suggest', 'headline', 'generate', 'compete', 'kit', 'plan'];
+const FLOW_PASSES: NewPassName[] = ['suggest', 'generate', 'compete', 'kit', 'plan'];
 
 async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Promise<unknown> {
   const country = countryOf(body.country);
   const audience = pass === 'suggest' ? '' : text(body.audience, 'audience', 80);
   const templateId = typeof body.templateId === 'string' && body.templateId ? body.templateId.slice(0, 40) : undefined;
 
-  if (pass === 'suggest' || pass === 'headline' || pass === 'generate') {
+  if (pass === 'suggest' || pass === 'generate') {
     const upload = await normalizeUpload(body.upload);
     if (pass === 'suggest') return { output: await runAudienceSuggest(upload) };
-    if (pass === 'headline') return { output: await runHeadline(upload, audience) };
-    return { output: await runGenerate(upload, audience, headlineOf(body.headline), templateId) };
+    return { output: await runGenerate(upload, audience, templateId) };
   }
 
   const idea = generatedIdeaOf(body.idea);

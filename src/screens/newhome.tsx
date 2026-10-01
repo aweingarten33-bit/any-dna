@@ -1,9 +1,14 @@
 // The new front door: drop anything, or describe it in words.
 import { useRef, useState, type ReactNode } from 'react';
 import { FileText, Image as ImageIcon } from 'lucide-react';
-import { Composer, HomeBackground } from '@/components/shell';
+import { Composer, HomeBackground, type ComposerOption } from '@/components/shell';
 import { fileToUpload, UploadError } from '@/lib/upload';
 import type { Upload } from '../../server/lib/types.ts';
+
+const ADD_OPTIONS: ComposerOption[] = [
+  { id: 'photo', label: 'Photo', hint: 'Any photo: a selfie, a tree, a concert' },
+  { id: 'document', label: 'Document', hint: 'PDF or Word' },
+];
 
 export function NewHome({ topBar, busy, onUpload, onDescribe }: {
   topBar: ReactNode;
@@ -36,7 +41,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     <main className="home">
       <section className="hero" aria-label="Start">
         <h1><span className="line">Drop anything.</span><br /><span className="line">Get an <span className="accent">app idea.</span></span></h1>
-        <p className="hero-sub">A photo, a document, or a few words. The app idea comes straight from what you drop in.</p>
+        <p className="hero-sub">A photo, a document, or a few words, even a song title. The app idea comes straight from what you drop in.</p>
       </section>
       <div className="drop-row">
         <button type="button" className="btn-pill" disabled={active} onClick={() => photoRef.current?.click()}>
@@ -55,7 +60,9 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     </main>
     <div className="dock home-dock">
       <div className="dock-stack">
-        <Composer placeholder="Or describe it in words…" busy={active}
+        <Composer placeholder="Or type anything…" busy={active}
+          options={ADD_OPTIONS} option="" menuTitle="Add a file"
+          onOption={(id) => (id === 'photo' ? photoRef : docRef).current?.click()}
           onSubmit={(text) => { const trimmed = text.trim(); if (trimmed) onDescribe(trimmed); }} />
       </div>
     </div>

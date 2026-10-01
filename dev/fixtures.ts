@@ -111,10 +111,6 @@ const PARTS: Record<string, any> = {
   suggest: {
     audiences: ['Concertgoers', 'Festival crews', 'Sports fans', 'Theme park families'],
   },
-  headline: {
-    name: 'Crowdlight',
-    tagline: 'Find your friends in any crowd, fast.',
-  },
   generate: {
     name: 'Crowdlight',
     tagline: 'Find your friends in any crowd, fast.',
@@ -135,6 +131,7 @@ const PARTS: Record<string, any> = {
     why_use: 'You use it every time you go out with a group, because losing people keeps happening.',
     mvp: ['Crew dots on a venue map', 'Beacon pulse', 'Halfway meeting point', 'Battery-saver mode'],
     monetization: 'Free for crews. Venues pay for crowd-flow maps.',
+    main_risk: 'Phones lose signal in packed venues, so dots go stale.',
     search_terms: ['find friends at concerts', 'concert buddy locator', 'festival crew map'],
   },
 };
@@ -147,7 +144,6 @@ export const PASS_FIXTURES: Record<string, any> = {
   kit: PARTS.kit,
   plan: PARTS.plan,
   suggest: PARTS.suggest,
-  headline: PARTS.headline,
   generate: PARTS.generate,
 };
 
@@ -156,7 +152,6 @@ function whichPass(system: string) {
   if (system.includes('find the complaints that repeat')) return 'gaps';
   if (system.includes('You design one new app')) return 'build';
   if (system.includes('suggest 4 to 6 audiences')) return 'suggest';
-  if (system.includes('Name the app they would build from it')) return 'headline';
   if (system.includes('Turn it into a real app people would use')) return 'generate';
   if (system.includes('content of the main screen')) return 'kit';
   if (system.includes('one-page business plan')) return 'plan';

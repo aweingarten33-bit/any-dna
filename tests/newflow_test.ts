@@ -19,7 +19,7 @@ async function flowCall(body: unknown, { fresh = true } = {}) {
 
 const TEXT_UPLOAD = { kind: 'text', text: 'an app for people who lose their friends at concerts' };
 
-Deno.test('new flow: upload → audiences → headline → idea → competitors', async () => {
+Deno.test('new flow: upload → audiences → idea → competitors', async () => {
   const fixtures = installFixtures();
   try {
     const upload = TEXT_UPLOAD;
@@ -29,33 +29,30 @@ Deno.test('new flow: upload → audiences → headline → idea → competitors'
     assert(audiences.length >= 4, 'suggests several audiences');
 
     const audience = 'Concertgoers';
-    const headline = await flowCall({ pass: 'headline', upload, audience });
-    assertEquals(headline.status, 200);
-    assertEquals(headline.body.output.name, 'Crowdlight');
-
-    const generate = await flowCall({ pass: 'generate', upload, audience, headline: headline.body.output });
+    // The name comes out of the same call as the idea, after the thinking.
+    const generate = await flowCall({ pass: 'generate', upload, audience });
     assertEquals(generate.status, 200);
     const idea = generate.body.output as GeneratedIdea;
-    // The headline is kept exactly.
     assertEquals(idea.name, 'Crowdlight');
     assertEquals(idea.tagline, 'Find your friends in any crowd, fast.');
+    assertEquals(idea.main_risk, 'Phones lose signal in packed venues, so dots go stale.');
     assert(idea.pattern.length > 0);
     assert(idea.callbacks.length > 0);
     assert(idea.search_terms.length > 0);
 
     // A template steer reaches the prompt.
-    const steered = await flowCall({ pass: 'generate', upload, audience, headline: headline.body.output, templateId: 'people-map' });
+    const steered = await flowCall({ pass: 'generate', upload, audience, templateId: 'people-map' });
     assertEquals(steered.status, 200);
     const steeredCall = fixtures.aiRequests.find((r) => r.provider === 'muse' && JSON.stringify(r.body.input).includes('Find My'));
     assert(steeredCall, 'the template steer reaches the generate prompt');
 
-    // Competitors come from a real App Store search, no AI.
-    const compete = await flowCall({ pass: 'compete', upload, audience, idea });
+    // Competitors come from a real App Store search, no AI. Later passes don't need the upload bytes.
+    const compete = await flowCall({ pass: 'compete', audience, idea });
     assertEquals(compete.status, 200);
     assert(compete.body.competitors.length > 0 && compete.body.competitors.length <= 5);
 
     // The mockup words still work with the new idea shape.
-    const kit = await flowCall({ pass: 'kit', upload, audience, idea });
+    const kit = await flowCall({ pass: 'kit', audience, idea });
     assertEquals(kit.status, 200);
     assertEquals((kit.body.output as Kit).screen.cards.length, 3);
   } finally {

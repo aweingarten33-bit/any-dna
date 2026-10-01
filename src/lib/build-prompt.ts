@@ -1,6 +1,6 @@
 // The prompt a person pastes into an AI app builder, and where to paste it.
 // Written in code from the idea and the mockup content, so it costs no AI time.
-import type { Idea, Kit } from '../../server/lib/types.ts';
+import type { GeneratedIdea, Idea, Kit } from '../../server/lib/types.ts';
 
 export function buildPrompt(idea: Idea, kit?: Kit): string {
   const lines = [
@@ -96,6 +96,9 @@ export function newBuildPrompt(idea: GeneratedIdea, kit?: Kit): string {
     ...idea.how_it_works.map((step, i) => `${i + 1}. ${step}`),
     '',
     `The one killer feature: ${idea.killer_feature}`,
+    '',
+    'Use these words in the app itself:',
+    ...idea.callbacks.map((callback) => `- ${callback.detail}: ${callback.meaning}`),
     '',
     'Build only these features for the first version:',
     ...idea.mvp.map((item) => `- ${item}`),

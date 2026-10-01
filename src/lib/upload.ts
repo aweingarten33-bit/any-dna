@@ -63,11 +63,7 @@ export async function fileToUpload(file: File): Promise<Upload> {
 
 /** Short label for the upload, shown on screens that came from it. */
 export function uploadLabel(upload: Upload): string {
-  switch (upload.kind) {
-    case 'text': return upload.text.length > 60 ? `"${upload.text.slice(0, 60)}…"` : `"${upload.text}"`;
-    case 'photo': return upload.filename || 'your photo';
-    case 'document': return upload.filename || 'your document';
-    case 'song': return upload.title ? `${upload.title}${upload.artist ? ` by ${upload.artist}` : ''}` : 'your song';
-    case 'video': return upload.title || 'your video';
-  }
+  if (upload.kind === 'text') return upload.text.length > 60 ? `“${upload.text.slice(0, 60)}…”` : `“${upload.text}”`;
+  if (upload.kind === 'photo') return 'your photo';
+  return upload.filename || 'your document';
 }

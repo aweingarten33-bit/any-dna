@@ -150,11 +150,11 @@ export type Blueprint = {
 
 // ---- The new front door: ideas from the upload itself ------------------------
 
-/** What the user dropped in. The bytes travel with each request and are never stored. */
+/** What the user dropped in, as the browser sends it. The bytes travel with each request and are never stored. */
 export type Upload =
-  | { kind: 'text'; text: string; label: string }
-  | { kind: 'photo'; dataUrl: string; label: string }
-  | { kind: 'pdf'; dataUrl: string; label: string };
+  | { kind: 'text'; text: string }
+  | { kind: 'photo'; dataUrl: string; filename: string }
+  | { kind: 'document'; dataUrl: string; filename: string };
 
 /** The full output of the new generate pass. */
 export type GeneratedIdea = {
@@ -170,20 +170,21 @@ export type GeneratedIdea = {
   why_use: string;
   mvp: string[];
   monetization: string;
+  main_risk: string;
   search_terms: string[];
 };
 
-export type NewPassName = 'suggest' | 'headline' | 'generate' | 'compete' | 'kit' | 'plan';
+export type NewPassName = 'suggest' | 'generate' | 'compete' | 'kit' | 'plan';
 
 /** Everything one new-flow run produces. */
 export type NewBlueprint = {
   /** 3 for the upload-first rewrite. */
   version: 3;
+  /** What was uploaded, by kind and a short label. Never the bytes. */
   upload: { kind: Upload['kind']; label: string };
   audience: string;
-  /** The template id when the user steered it, or null for "surprise me" / skipped. */
+  /** The template id when the user steered it, or null when they skipped it. */
   templateId: string | null;
-  headline: { name: string; tagline: string };
   idea: GeneratedIdea;
   /** Every App Store search result for the idea's search terms. */
   searched: CompetitorListing[];

@@ -44,11 +44,6 @@ export const audienceSuggestSchema = z.object({
   audiences: z.array(z.string()),
 });
 
-export const headlineSchema = z.object({
-  name: z.string(),
-  tagline: z.string(),
-});
-
 export const generateSchema = z.object({
   name: z.string(),
   tagline: z.string(),
@@ -62,6 +57,7 @@ export const generateSchema = z.object({
   why_use: z.string(),
   mvp: z.array(z.string()),
   monetization: z.string(),
+  main_risk: z.string(),
   search_terms: z.array(z.string()),
 });
 

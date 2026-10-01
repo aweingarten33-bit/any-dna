@@ -515,3 +515,47 @@
   .pr-quotes b span { font-weight: 400; color: #7a7d88; margin-left: 2mm; }
   .pr-quotes q { display: block; margin-top: 1mm; padding-left: 3mm; border-left: 1pt solid #c9cad2; font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 11.5pt; color: #3b3d45; }
 }
+
+/* ---- New front door: home ---- */
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.hero-sub { max-width: 30em; margin: 0 auto; padding: 0 20px; font-size: 16.5px; line-height: 1.5; color: rgba(244, 241, 234, 0.72); text-align: center; }
+.drop-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 0 20px; }
+.drop-row .btn-pill { min-width: 132px; justify-content: center; gap: 10px; background: rgba(20, 30, 58, 0.55); border-color: rgba(190, 210, 255, 0.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.home-error { margin: 0 auto; max-width: 28em; padding: 12px 16px; border-radius: 16px; font-size: 14.5px; text-align: center; color: #ffd2cc; background: rgba(255, 122, 107, 0.12); border: 1px solid rgba(255, 122, 107, 0.35); }
+.home-privacy { text-align: center; font-size: 12.5px; color: rgba(244, 241, 234, 0.5); padding: 0 20px; }
+
+/* ---- New front door: loading ---- */
+.upload-thumb { display: block; width: 96px; height: 96px; object-fit: cover; border-radius: 22px; margin-bottom: 14px; border: 1px solid var(--hair-2); box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.8); }
+
+/* ---- New front door: steer it (templates) ---- */
+.tpl-grid { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+@media (max-width: 360px) { .tpl-grid { grid-template-columns: 1fr; } }
+.tpl-card {
+  width: 100%; height: 100%; display: grid; align-content: start; gap: 8px; padding: 16px; border-radius: 22px; text-align: left;
+  color: var(--paper); background: rgba(244, 241, 234, 0.035); border: 1px solid var(--hair-2);
+  transition: border-color 0.2s, background 0.2s, transform 0.15s var(--out);
+}
+.tpl-card:active { transform: scale(0.985); }
+@media (hover: hover) { .tpl-card:hover { border-color: var(--paper-2); } }
+.tpl-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; color: var(--paper-3); }
+.tpl-top small { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+.tpl-tick { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--hair-2); color: transparent; }
+.tpl-card b { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+.tpl-card p { font-size: 13.5px; line-height: 1.45; color: var(--paper-2); }
+.tpl-card.is-on { border-color: transparent; background: linear-gradient(rgba(10, 12, 20, 0.92), rgba(10, 12, 20, 0.92)) padding-box, var(--ink-grad) border-box; border: 1.5px solid transparent; }
+.tpl-card.is-on .tpl-tick { background: var(--paper); color: #000; border-color: var(--paper); }
+.tpl-card.is-auto { grid-column: 1 / -1; }
+.tpl-card.is-auto svg { color: #c084fc; }
+
+/* ---- New front door: the idea ---- */
+.pattern-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; }
+.pattern-chain span { display: inline-flex; align-items: center; gap: 6px; }
+.pattern-chain b { padding: 6px 10px; border-radius: 10px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper); background: rgba(244, 241, 234, 0.06); border: 1px solid var(--hair-2); }
+.pattern-chain svg { color: var(--paper-3); }
+.killer { display: grid; gap: 6px; margin-top: 22px; padding: 20px; border-radius: 24px; color: #000; background: var(--paper); }
+.killer span { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0, 0, 0, 0.55); }
+.killer p { font-size: 17px; line-height: 1.45; font-weight: 500; color: #111216; }
+.callbacks { list-style: none; display: grid; gap: 8px; }
+.callbacks li { display: grid; gap: 3px; padding: 14px 16px; border-radius: 18px; border: 1px solid var(--hair); background: rgba(244, 241, 234, 0.03); }
+.callbacks b { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 19px; color: var(--paper); }
+.callbacks p { font-size: 14.5px; line-height: 1.45; color: var(--paper-2); }

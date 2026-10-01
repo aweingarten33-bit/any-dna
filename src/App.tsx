@@ -1,38 +1,41 @@
-// Spinoff: one screen at a time.
-// home → confirm → divider → audience → loading → divider → result
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+// One screen at a time.
+// home (drop anything) → who's it for → steer it (optional) → inventing → result
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { CloseIcon, TopBar } from '@/components/shell';
-import { api } from '@/lib/api';
 import { ideaStore, useSavedIdeas } from '@/lib/ideas-store';
-import { Home } from '@/screens/home';
-import { Audience, Confirm, Divider, Loading } from '@/screens/flow';
+import { NewHome } from '@/screens/newhome';
+import { NewAudience } from '@/screens/newaudience';
+import { NewSteer } from '@/screens/newsteer';
+import { NewLoading } from '@/screens/newloading';
+import { NewResult } from '@/screens/newresult';
 import { Result } from '@/screens/result';
 import { Saved } from '@/screens/saved';
-import type { AppListing, Blueprint, SavedIdea } from '../server/lib/types.ts';
+import { Divider } from '@/screens/flow';
+import { isNewBlueprint, type Blueprint, type NewBlueprint, type SavedIdea, type Upload } from '../server/lib/types.ts';
 
 type ScreenState =
   | { name: 'home' }
-  | { name: 'confirm'; candidates: AppListing[]; index: number }
-  | { name: 'audience'; app: AppListing; audience?: string }
-  | { name: 'loading'; app: AppListing; audience: string }
-  | { name: 'to-result'; idea: SavedIdea }
+  | { name: 'audience'; upload: Upload; audience?: string }
+  | { name: 'steer'; upload: Upload; audience: string; templateId?: string | null }
+  | { name: 'loading'; upload: Upload; audience: string; templateId: string | null }
   | { name: 'result'; idea: SavedIdea }
   | { name: 'saved' };
 
-// A step back into the checklist would rerun it, so back lands on the audience instead.
+// Going back into the loading screen would rerun it, so back lands on the steer screen instead.
 function restorable(screen: ScreenState): ScreenState {
-  if (screen.name === 'loading') return { name: 'audience', app: screen.app, audience: screen.audience };
-  if (screen.name === 'to-result') return { name: 'result', idea: screen.idea };
+  if (screen.name === 'loading') return { name: 'steer', upload: screen.upload, audience: screen.audience, templateId: screen.templateId };
+  return screen;
+}
+
+/** History entries can't hold big uploads on some browsers; a step that lost its upload starts over. */
+function usable(screen: ScreenState): ScreenState {
+  if ('upload' in screen && !screen.upload) return { name: 'home' };
   return screen;
 }
 
 export default function App() {
   const [screen, setScreen] = useState<ScreenState>({ name: 'home' });
-  const [finding, setFinding] = useState(false);
-  const [findError, setFindError] = useState<string | null>(null);
-  const lastFind = useRef<{ query: string; country: string } | null>(null);
-  const findAbort = useRef<AbortController | null>(null);
   const saved = useSavedIdeas();
 
   const go = useCallback((next: ScreenState, replace = false) => {
@@ -43,40 +46,22 @@ export default function App() {
 
   useEffect(() => {
     history.replaceState({ screen: { name: 'home' } }, '');
-    const onPop = (event: PopStateEvent) => setScreen(restorable((event.state?.screen as ScreenState) ?? { name: 'home' }));
+    const onPop = (event: PopStateEvent) => setScreen(usable(restorable((event.state?.screen as ScreenState) ?? { name: 'home' })));
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
-  async function find(query: string, country: string) {
-    lastFind.current = { query, country };
-    findAbort.current?.abort();
-    const abort = new AbortController();
-    findAbort.current = abort;
-    setFinding(true);
-    setFindError(null);
-    try {
-      const { candidates } = await api.resolveApp(query, country, abort.signal);
-      if (!abort.signal.aborted) go({ name: 'confirm', candidates, index: 0 });
-    } catch (error) {
-      if (!abort.signal.aborted) setFindError(error instanceof Error ? error.message : String(error));
-    } finally {
-      if (findAbort.current === abort) setFinding(false);
-    }
+  function goHome() { go({ name: 'home' }); }
+
+  function finish(blueprint: NewBlueprint) {
+    go({ name: 'result', idea: ideaStore.save(blueprint) }, true);
   }
 
-  function goHome() {
-    findAbort.current?.abort();
-    setFinding(false);
-    setFindError(null);
-    go({ name: 'home' });
-  }
-
-  function finish(blueprint: Blueprint) {
-    // Start the mockup on the server now; the blueprint screen joins the same job when it opens.
-    void api.kit(blueprint.app, blueprint.audience, blueprint.idea).catch(() => {});
-    const idea = ideaStore.save(blueprint);
-    go({ name: 'to-result', idea }, true);
+  function update(entry: SavedIdea, next: Blueprint | NewBlueprint) {
+    const updated = ideaStore.update(entry.id, next);
+    if (!updated) return;
+    setScreen((current) => (current.name === 'result' && current.idea.id === entry.id ? { name: 'result', idea: updated } : current));
+    try { history.replaceState({ screen: { name: 'result', idea: updated } }, ''); } catch { /* state too large for history: fine */ }
   }
 
   const back = { label: 'Back', icon: <ArrowLeft size={22} />, onClick: () => history.back() };
@@ -85,56 +70,48 @@ export default function App() {
     <TopBar title={options.title} left={options.left} onBrand={goHome} savedCount={saved.length} onSaved={() => go({ name: 'saved' })} />;
 
   if (screen.name === 'home') {
-    return <Home topBar={topBar()} busy={finding} error={findError} onFind={(query, country) => void find(query, country)}
-      onRetry={() => (lastFind.current ? void find(lastFind.current.query, lastFind.current.country) : setFindError(null))} />;
+    return <NewHome topBar={topBar()} busy={false}
+      onUpload={(upload) => go({ name: 'audience', upload })}
+      onDescribe={(text) => go({ name: 'audience', upload: { kind: 'text', text } })} />;
   }
 
   let body: ReactNode;
   let bar = topBar({ left: back });
   switch (screen.name) {
-    case 'confirm':
-      body = <Confirm candidates={screen.candidates} index={screen.index}
-        onYes={(app) => go({ name: 'audience', app })}
-        onNext={() => go({ ...screen, index: screen.index + 1 }, true)}
-        onSearchAgain={goHome} />;
-      break;
     case 'audience':
-      body = <Audience app={screen.app} initial={screen.audience} onPick={(audience) => go({ name: 'loading', app: screen.app, audience })} />;
+      body = <NewAudience upload={screen.upload} initial={screen.audience}
+        onPick={(audience) => go({ name: 'steer', upload: screen.upload, audience })} />;
+      break;
+    case 'steer':
+      body = <NewSteer initial={screen.templateId ?? null}
+        onPick={(templateId) => go({ name: 'loading', upload: screen.upload, audience: screen.audience, templateId })} />;
       break;
     case 'loading':
       bar = topBar({ left: close });
-      body = <Loading key={`${screen.app.app_id}:${screen.audience}`} app={screen.app} audience={screen.audience} onDone={finish} onBack={() => history.back()} />;
-      break;
-    case 'to-result':
-      bar = topBar({ left: close });
-      body = <Divider n="03" part="Part 3 of 3" title="Your blueprint is ready" sub={`${screen.idea.output_json.idea.name}: five sections, one card each. Swipe through.`} action="Show me"
-        band={[screen.idea.output_json.idea.name, `For ${screen.idea.output_json.audience.toLowerCase()}`, `Built from ${screen.idea.output_json.app.name}`]}
-        onContinue={() => go({ name: 'result', idea: screen.idea }, true)} />;
+      body = <NewLoading key={`${screen.audience}:${screen.templateId}`} upload={screen.upload} audience={screen.audience} templateId={screen.templateId}
+        onDone={finish} onBack={() => history.back()} />;
       break;
     case 'result': {
       const entry = screen.idea;
       const blueprint = entry.output_json;
       bar = topBar({ left: close, title: blueprint.idea.name });
-      // Ideas saved before the plain-language rewrite have a different shape: offer to run them again.
-      body = blueprint.version !== 2
-        ? <Divider n="!" part="Saved with an older version" title="Run it again" sub={`Spinoff has been rewritten since you saved ${blueprint.idea.name}. Run ${blueprint.app.name} for ${blueprint.audience.toLowerCase()} again to see it in the new format.`} action="Run it again"
-            band={[blueprint.app.name, `For ${blueprint.audience.toLowerCase()}`]}
-            onContinue={() => go({ name: 'loading', app: blueprint.app, audience: blueprint.audience })} />
-        : <Result blueprint={blueprint} onStartOver={goHome}
-            onUpdate={(next) => {
-              const updated = ideaStore.update(entry.id, next);
-              if (!updated) return;
-              setScreen((current) => (current.name === 'result' && current.idea.id === entry.id ? { name: 'result', idea: updated } : current));
-              try { history.replaceState({ screen: { name: 'result', idea: updated } }, ''); } catch { /* state too large for history: fine */ }
-            }}
-            onDifferentAudience={() => go({ name: 'audience', app: blueprint.app })} />;
+      if (isNewBlueprint(blueprint)) {
+        body = <NewResult blueprint={blueprint} onStartOver={goHome} onUpdate={(next) => update(entry, next)} />;
+      } else if (blueprint.version === 2) {
+        // Ideas saved from the earlier app-based version still open.
+        body = <Result blueprint={blueprint} onStartOver={goHome} onUpdate={(next) => update(entry, next)} onDifferentAudience={goHome} />;
+      } else {
+        // Saved before either current format: there's nothing safe to show.
+        const name = (blueprint as { idea?: { name?: string } }).idea?.name ?? 'This idea';
+        body = <Divider n="!" part="Saved with an older version" title="Make a new one" sub={`${name} was saved with an older version that can’t be shown any more.`} action="Start"
+          band={[name]} onContinue={goHome} />;
+      }
       break;
     }
     case 'saved':
       bar = topBar({ left: close });
       body = <Saved ideas={saved} onNew={goHome}
         onOpen={(idea) => go({ name: 'result', idea })}
-        onDifferentAudience={(idea) => go({ name: 'audience', app: idea.output_json.app })}
         onDelete={(idea) => ideaStore.remove(idea.id)} />;
       break;
   }
