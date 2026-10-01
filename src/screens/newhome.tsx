@@ -48,7 +48,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     {topBar}
     <main className="home">
       <section className="hero" aria-label="Start">
-        <h1><span className="line">Drop anything.</span><br /><span className="line">Get an <span className="accent">app idea.</span></span></h1>
+        <h1><span className="line">Drop anything.</span><br /><span className="line">Get an app idea.</span></h1>
         <p className="hero-sub">A photo, a video, a song, a document, or a few words. The app idea comes straight from what you drop in.</p>
       </section>
       <div className="drop-row">

@@ -43,7 +43,7 @@ export function NewLoading({ upload, audience, direction, templateId, onDone, on
   const meter = useMeter(states);
   const slow = useSlow(states.read === 'running' || states.invent === 'running');
   const found = !!(progress.read || progress.ideas);
-  return <Screen n="03" label="The idea" title="Inventing your app"
+  return <Screen title="Inventing your app"
     sub={<span className="route"><span>{uploadLabel(upload)}</span><ArrowRight size={14} /><span>{audience}</span></span>}
     actions={error
       ? <>

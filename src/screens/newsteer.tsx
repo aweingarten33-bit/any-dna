@@ -1,7 +1,7 @@
 // Optional: steer the idea with a proven trick from a real app (like
 // Videoleap's template gallery). Skipping lets the upload decide alone.
 import { useState, type CSSProperties } from 'react';
-import { ArrowBigUp, ArrowRight, Camera, Check, Flame, Footprints, Gavel, Heart, MapPin, Puzzle, Receipt, Route, ScanSearch, Sparkles, Timer, Users, type LucideIcon } from 'lucide-react';
+import { ArrowBigUp, Camera, Check, Flame, Footprints, Gavel, Heart, MapPin, Puzzle, Receipt, Route, ScanSearch, Sparkles, Timer, Users, type LucideIcon } from 'lucide-react';
 import { Screen } from '@/components/bits';
 import { TEMPLATES, type Template } from '../../server/lib/templates.ts';
 import { PhoneMockup } from '@/components/mockup';
@@ -34,19 +34,19 @@ function Thumb({ template }: { template: Template }) {
 export function NewSteer({ initial, onPick }: { initial: string | null; onPick: (templateId: string | null) => void }) {
   const [picked, setPicked] = useState<string | null>(initial);
   const chosen = TEMPLATES.find((template) => template.id === picked);
-  return <Screen n="02" label="Optional" title="Steer it?"
-    sub="Pick a proven trick from a real app to build in, or let what you dropped in decide."
+  return <Screen title="Add a proven trick?"
+    sub="Each one is how a real app keeps people coming back. Pick one to build in, or skip it and let your upload decide."
     actions={<>
       <button type="button" className="btn-pill is-primary" onClick={() => onPick(picked)} data-testid="button-steer">
-        <span>{chosen ? <>Build it with <em>{chosen.name.toLowerCase()}</em></> : 'Let it decide'}</span><ArrowRight size={18} />
+        <span>{chosen ? `Use “${chosen.name}”` : 'Skip, use my upload'}</span>
       </button>
     </>}>
     <ul className="tpl-grid" role="radiogroup" aria-label="Templates">
       <li className="fade" style={{ '--d': '260ms' } as CSSProperties}>
         <button type="button" role="radio" aria-checked={picked === null} className={`tpl-card is-auto${picked === null ? ' is-on' : ''}`} onClick={() => setPicked(null)}>
           <span className="tpl-top"><Sparkles size={18} /><span className="tpl-tick" aria-hidden="true"><Check size={14} strokeWidth={3} /></span></span>
-          <b>Let it decide</b>
-          <p>The pattern comes only from what you dropped in.</p>
+          <b>No trick</b>
+          <p>The idea comes only from what you dropped in.</p>
         </button>
       </li>
       {TEMPLATES.map((template, i) => <li key={template.id} className="fade" style={{ '--d': `${300 + i * 35}ms` } as CSSProperties}>

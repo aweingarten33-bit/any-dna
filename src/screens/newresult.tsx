@@ -17,7 +17,6 @@ function Panel({ index, active, title, source, children }: { index: number; acti
   return <article className={`bp-panel${active ? ' is-active' : ''}`} aria-roledescription="card" aria-label={`${index + 1} of ${CARDS.length}: ${title}`} aria-hidden={!active}>
     <div className="bp-panel-inner">
       <header className="bp-panel-head">
-        <span className="bp-panel-num" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
         <h2>{title}</h2>
         <div className="bp-panel-sources">{source}</div>
       </header>
@@ -115,7 +114,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
       if (event.key === 'ArrowRight') { event.preventDefault(); go(active + 1); }
       if (event.key === 'ArrowLeft') { event.preventDefault(); go(active - 1); }
     }}>
-      <Panel index={0} active={active === 0} title="The idea" source={<Source />}>
+      <Panel index={0} active={active === 0} title="The idea" source={null}>
         <h3 className="idea-name">{idea.name}</h3>
         <p className="idea-pitch">{idea.tagline}</p>
         <p className="idea-who">{idea.what_it_is}</p>
@@ -133,11 +132,11 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
           <Field label="What it’s not">{idea.what_its_not}</Field>
           <Field label="Why people would keep using it">{idea.why_use}</Field>
           <Field label="Biggest risk">{idea.main_risk}</Field>
-          {template && <Field label="Steered with">{template.name}, like {template.sourceApp}</Field>}
+          {template && <Field label="Proven trick built in">{template.name}, like {template.sourceApp}</Field>}
         </dl>
       </Panel>
 
-      <Panel index={1} active={active === 1} title="Build it" source={<Source />}>
+      <Panel index={1} active={active === 1} title="Build it" source={null}>
         <p className="lede">What the first screen could look like, and how to build it this week.</p>
         <div className="phone-stage">
           {kit ? <PhoneMockup name={idea.name} screen={kit.screen} layout={layoutFor(blueprint.templateId)} /> : kitRun.state === 'failed'
@@ -145,7 +144,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
             : <PhoneSkeleton />}
         </div>
         <h4 className="sub-head">First version</h4>
-        <ol className="mvp">{idea.mvp.map((item, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><p>{item}</p></li>)}</ol>
+        <ul className="mvp">{idea.mvp.map((item, i) => <li key={i}><p>{item}</p></li>)}</ul>
         <h4 className="sub-head">Your build prompt</h4>
         <div className="prompt-box">
           <pre>{prompt}</pre>
@@ -175,11 +174,10 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
         </>}
       </Panel>
 
-      <Panel index={2} active={active === 2} title="Competitors" source={<Source fetched />}>
+      <Panel index={2} active={active === 2} title="Competitors" source={<Source fetched>Real App Store data</Source>}>
         <p className="lede">Searched the App Store for {idea.search_terms.map((term, i) => <span key={term}>{i > 0 && ', '}<q>{term}</q></span>)}. Found {searched.length} apps. {competitors.length ? `These ${competitors.length} came up the most.` : 'Nothing came up.'}</p>
         <ul className="rivals">
           {competitors.map((comp, i) => <li key={comp.app_id}>
-            <span className="rival-n">{String(i + 1).padStart(2, '0')}</span>
             <AppIcon app={comp} size={48} />
             <div className="rival-main">
               <div className="rival-name"><b>{comp.name}</b><a href={comp.url} target="_blank" rel="noreferrer" aria-label={`Open ${comp.name} on the App Store`}><ArrowUpRight size={16} /></a></div>
@@ -192,7 +190,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
         <p className="fine">Names, prices and ratings come from the App Store. Prices are upfront prices; Apple doesn’t publish in-app or subscription prices. Coming up in the same search doesn’t mean an app does the same job; open it to check.</p>
       </Panel>
 
-      <Panel index={3} active={active === 3} title="Business plan" source={<Source />}>
+      <Panel index={3} active={active === 3} title="Business plan" source={null}>
         <dl className="stack-fields is-first"><Field label="How it makes money">{idea.monetization}</Field></dl>
         {plan ? <>
           <p className="plan-summary">{plan.summary}</p>
@@ -225,14 +223,14 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
         </div>
       </Panel>
 
-      <Panel index={4} active={active === 4} title="Where it came from" source={<Source />}>
+      <Panel index={4} active={active === 4} title="Where it came from" source={null}>
         <p className="lede">What we read in {blueprint.upload.label}, and the pattern underneath that the app is built on.</p>
         <blockquote className="pull">{blueprint.read.meaning}</blockquote>
         <p className="origin-why">{blueprint.read.why_different}</p>
         <h4 className="sub-head">The details it calls back to</h4>
         <ul className="ticks big">{blueprint.read.details.map((detail, i) => <li key={i}>{detail}</li>)}</ul>
         <h4 className="sub-head">Its DNA, strongest first</h4>
-        <ol className="tricks">{blueprint.read.mechanics.map((mechanic, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><div>
+        <ol className="tricks">{blueprint.read.mechanics.map((mechanic, i) => <li key={i}><div>
           <b>{mechanic.name}</b>
           <p className="pattern-chain">{mechanic.chain.split(/\s*(?:→|->)\s*/).map((part, j, all) => <span key={j}><b>{part}</b>{j < all.length - 1 && <ArrowRight size={14} aria-hidden="true" />}</span>)}</p>
           <p>{mechanic.how_it_works} {mechanic.why_it_works}</p>
@@ -240,7 +238,7 @@ export function NewResult({ blueprint, onUpdate, onStartOver }: {
         </div></li>)}</ol>
         {blueprint.read.unknowns.length > 0 && <dl className="stack-fields"><Field label="What it can’t tell"><ul className="ticks is-muted">{blueprint.read.unknowns.map((item) => <li key={item}>{item}</li>)}</ul></Field></dl>}
         <div className="verdict-actions">
-          <button type="button" className="btn-pill is-primary" onClick={onStartOver}><span>Make another one</span><ArrowRight size={18} /></button>
+          <button type="button" className="btn-pill is-primary" onClick={onStartOver}><span>Make another one</span></button>
         </div>
       </Panel>
     </div>

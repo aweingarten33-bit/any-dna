@@ -10,7 +10,7 @@ export function Saved({ ideas, onOpen, onDelete, onNew }: {
   onNew: () => void;
 }) {
   return <Screen label={`${ideas.length} saved on this device`} title="Saved ideas"
-    actions={<button type="button" className="btn-pill" onClick={onNew}><span>Make a new one</span><ArrowRight size={18} /></button>}>
+    actions={<button type="button" className="btn-pill" onClick={onNew}><span>Make a new one</span></button>}>
     {ideas.length === 0
       ? <p className="screen-note">Ideas you build show up here.</p>
       : <ul className="saved">
