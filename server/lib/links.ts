@@ -1,7 +1,6 @@
-// Pasted links: Spotify, Apple Music, YouTube, TikTok, Instagram and GitHub. The
-// server reads what the service publicly shares about the link (title, creator,
-// cover image, a repo's description and README) and nothing else. Only these services are fetched, never an arbitrary
-// address, so a pasted link can't point the server at something private.
+// Pasted links: App Store, Spotify, Apple Music, YouTube, TikTok, Instagram and GitHub.
+// The server reads what the exact supplied service publicly shares about the link and nothing else.
+// Only these services are fetched, never an arbitrary address, so a pasted link can't point the server at something private.
 
 export class LinkError extends Error {}
 
@@ -11,11 +10,11 @@ export { LINK_NAMES, linkSource, type LinkSource };
 
 export type LinkInfo = {
   source: LinkSource;
-  /** What the service calls it: a song, a video, a post. */
+  /** What the service calls it: an app, song, video, post, repo. */
   kind: string;
   title: string;
   creator: string;
-  /** Extra public text: a caption, an album, a year. */
+  /** Extra public text: a caption, app description, album, year, README excerpt. */
   detail: string;
   /** The cover image or thumbnail, if the service shared one. */
   imageUrl: string;
@@ -25,10 +24,9 @@ async function fetchText(url: string, accept: string): Promise<string> {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(8000),
     redirect: 'follow',
-    headers: { accept, 'user-agent': 'Mozilla/5.0 (compatible; SpinoffBot/1.0)', 'accept-language': 'en' },
+    headers: { accept, 'user-agent': 'Mozilla/5.0 (compatible; AnyDNABot/1.0)', 'accept-language': 'en' },
   });
   if (!response.ok) throw new LinkError(`${response.status}`);
-  // A page is only read for its first part, where the share tags are.
   const reader = response.body?.getReader();
   if (!reader) return '';
   const chunks: Uint8Array[] = [];
@@ -58,7 +56,7 @@ function decodeEntities(text: string) {
   return text.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 }
 
-/** The page's share tags (og:title and friends), which is what a link preview in a chat app shows. */
+/** The page's share tags (what a link preview in a chat app usually sees). */
 async function shareTags(url: string): Promise<Record<string, string>> {
   const html = await fetchText(url, 'text/html');
   const tags: Record<string, string> = {};
@@ -69,7 +67,7 @@ async function shareTags(url: string): Promise<Record<string, string>> {
 
 const str = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
-/** Reads what a supported service publicly shares about a link. */
+/** Reads only what a supported service publicly shares about the exact link supplied. */
 export async function readLink(raw: string): Promise<LinkInfo> {
   const source = linkSource(raw);
   if (!source) throw new LinkError('unsupported');
@@ -84,8 +82,20 @@ export async function readLink(raw: string): Promise<LinkInfo> {
       return { source, kind: 'video', title: str(data.title), creator: str(data.author_name), detail: '', imageUrl: str(data.thumbnail_url) };
     }
     if (source === 'github') return await githubRepo(url);
+    if (source === 'app-store') {
+      const tags = await shareTags(url);
+      const title = str(tags['og:title']).replace(/\s+on the App Store$/i, '');
+      if (!title) throw new LinkError('private');
+      return {
+        source,
+        kind: 'app',
+        title,
+        creator: '',
+        detail: str(tags['og:description']).slice(0, 5000),
+        imageUrl: str(tags['og:image']),
+      };
+    }
     if (source === 'spotify') {
-      // og:description reads like "Seal · Song · 1994" or "Seal · Kiss from a Rose · Song · 1994".
       const tags = await shareTags(url);
       const parts = str(tags['og:description']).split('·').map((part) => part.trim()).filter(Boolean);
       const kind = /episode/i.test(tags['og:type'] ?? '') ? 'podcast episode' : /album/i.test(tags['og:type'] ?? '') ? 'album' : /playlist/i.test(tags['og:type'] ?? '') ? 'playlist' : 'song';
@@ -95,13 +105,11 @@ export async function readLink(raw: string): Promise<LinkInfo> {
       const tags = await shareTags(url);
       return { source, kind: 'song', title: str(tags['og:title']), creator: '', detail: str(tags['og:description']), imageUrl: str(tags['og:image']) };
     }
-    // Instagram often shows logged-out visitors nothing; a generic title means it didn't share the post.
     const tags = await shareTags(url);
     const title = str(tags['og:title']);
     if (!title || /^instagram$/i.test(title)) throw new LinkError('private');
     return { source, kind: 'post', title, creator: '', detail: str(tags['og:description']), imageUrl: str(tags['og:image']) };
   } catch (error) {
-    // Short codes (a status number, "private") become a plain message; written messages pass through.
     if (error instanceof LinkError && /^(\d+|private)$/.test(error.message)) throw new LinkError(`${LINK_NAMES[source]} didn’t share that link. Try a screenshot, or type what it is.`);
     if (error instanceof LinkError) throw error;
     throw new LinkError(`Couldn’t read that ${LINK_NAMES[source]} link. Check it’s public, or type what it is.`);
@@ -127,8 +135,7 @@ export async function linkImage(imageUrl: string): Promise<string | null> {
 
 // ---- GitHub ------------------------------------------------------------------
 // Public repos through GitHub's REST API. Without a token GitHub allows 60
-// requests an hour per server, so each repo is remembered for an hour; set
-// GITHUB_TOKEN (any token, no scopes needed) to raise the limit.
+// requests an hour per server, so each repo is remembered for an hour.
 
 const repoCache = new Map<string, { at: number; info: LinkInfo }>();
 
@@ -136,7 +143,7 @@ async function githubJson(path: string, accept = 'application/vnd.github+json'):
   const token = Deno.env.get('GITHUB_TOKEN');
   return await fetch(`https://api.github.com${path}`, {
     signal: AbortSignal.timeout(8000),
-    headers: { accept, 'user-agent': 'SpinoffBot/1.0', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: { accept, 'user-agent': 'AnyDNABot/1.0', ...(token ? { authorization: `Bearer ${token}` } : {}) },
   });
 }
 
