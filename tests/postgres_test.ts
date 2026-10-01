@@ -28,17 +28,22 @@ Deno.test({
     try {
       await call(resolveApp, { query: 'streakly' });
       await call(getReviews, { app_id: SOURCE_ID });
-      const first = await call(runPass, { pass: 'dissect', app_id: SOURCE_ID });
+      // dissect and gaps save at the same time; neither may erase the other.
+      const [first] = await Promise.all([
+        call(runPass, { pass: 'dissect', app_id: SOURCE_ID }),
+        call(runPass, { pass: 'gaps', app_id: SOURCE_ID }),
+      ]);
       assertEquals(first.cached, false);
       const second = await call(runPass, { pass: 'dissect', app_id: SOURCE_ID });
       assertEquals(second.cached, true);
       assertEquals(fixtures.attempts.get('dissect'), 1);
 
       const [row] = await sql`select listing_json->>'name' as name, jsonb_array_length(reviews_json->'reviews') as reviews,
-        analysis_json ? 'dissect' as has_dissect from app_cache where app_id = ${SOURCE_ID} and country = 'us'`;
+        analysis_json ? 'dissect' as has_dissect, analysis_json ? 'gaps' as has_gaps from app_cache where app_id = ${SOURCE_ID} and country = 'us'`;
       assertEquals(row.name, 'Streakly (demo app)');
       assertEquals(row.reviews, 8);
       assertEquals(row.has_dissect, true);
+      assertEquals(row.has_gaps, true);
     } finally {
       fixtures.restore();
       await sql.end();

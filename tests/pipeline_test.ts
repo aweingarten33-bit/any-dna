@@ -35,20 +35,25 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
     assertEquals(reviews.body.summary.low_star_count, 8);
     assertEquals(reviews.body.summary.scanned_count, 20);
 
-    const dissect = await call(runPass, { pass: 'dissect', app_id: SOURCE_ID });
+    // dissect and gaps run at the same time; both must end up cached.
+    const [dissect, gapsResponse] = await Promise.all([
+      call(runPass, { pass: 'dissect', app_id: SOURCE_ID }),
+      call(runPass, { pass: 'gaps', app_id: SOURCE_ID }),
+    ]);
     assertEquals(dissect.body.cached, false);
-
-    const gaps = (await call(runPass, { pass: 'gaps', app_id: SOURCE_ID })).body.output as Gaps;
+    const gaps = gapsResponse.body.output as Gaps;
     // Counts are from the cited reviews; the single-review theme is dropped as not repeated.
     assertEquals(gaps.repeated_complaints.map((c) => [c.theme.slice(0, 12), c.evidence_count]), [['Streaks lost', 3], ['Streak prote', 2], ['Too many gui', 2]]);
     // Examples are verbatim review text.
     assertMatch(gaps.repeated_complaints[0].example, /200 day streak|time zone|crashed/);
 
-    const fit = (await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID, audience: 'Dog owners' })).body.output as FitCheck;
-    assertEquals(fit.components.find((c) => c.status === 'survives')?.replacement, '');
-
-    const idea = (await call(runPass, { pass: 'mutate', app_id: SOURCE_ID, audience: 'Dog owners', fit_check: fit })).body.output as Idea;
+    // One call returns the fit check and the idea; dissect and gaps come from the cache.
+    const built = (await call(runPass, { pass: 'build', app_id: SOURCE_ID, audience: 'Dog owners' })).body.output as { fit_check: FitCheck; idea: Idea };
+    assertEquals(built.fit_check.components.find((c) => c.status === 'survives')?.replacement, '');
+    const idea = built.idea;
     assertEquals(idea.name, 'Walkies');
+    assertEquals(fixtures.attempts.get('dissect'), 1);
+    assertEquals(fixtures.attempts.get('gaps'), 1);
 
     const verdictResponse = await call(runPass, { pass: 'verdict', app_id: SOURCE_ID, audience: 'Dog owners', idea });
     const verdict = verdictResponse.body.output as Verdict;
@@ -68,7 +73,7 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
     assertEquals(fixtures.attempts.get('dissect'), 1);
 
     // Every AI call went to Muse, standard tier, not stored, with the schema in the instructions.
-    assert(fixtures.aiRequests.length >= 5);
+    assertEquals(fixtures.aiRequests.length, 4); // dissect, gaps, build, verdict
     for (const { provider, body } of fixtures.aiRequests) {
       assertEquals(provider, 'muse');
       assertEquals(body.model, 'muse-spark-1.3');
@@ -81,20 +86,20 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
 });
 
 Deno.test('invalid JSON is retried once, then the run fails clearly', async () => {
-  const once = installFixtures({ reply: (pass, attempt) => (pass === 'fit_check' && attempt === 1 ? 'not json {' : undefined) });
+  const once = installFixtures({ reply: (pass, attempt) => (pass === 'build' && attempt === 1 ? 'not json {' : undefined) });
   try {
-    const ok = await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID, audience: 'Renters' });
+    const ok = await call(runPass, { pass: 'build', app_id: SOURCE_ID, audience: 'Renters' });
     assertEquals(ok.status, 200);
-    assertEquals(once.attempts.get('fit_check'), 2);
+    assertEquals(once.attempts.get('build'), 2);
   } finally {
     once.restore();
   }
-  const always = installFixtures({ reply: (pass) => (pass === 'fit_check' ? { components: 'wrong shape' } : undefined) });
+  const always = installFixtures({ reply: (pass) => (pass === 'build' ? { components: 'wrong shape', idea: {} } : undefined) });
   try {
-    const failed = await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID, audience: 'Renters' });
+    const failed = await call(runPass, { pass: 'build', app_id: SOURCE_ID, audience: 'Renters' });
     assertEquals(failed.status, 502);
     assertMatch(failed.body.error, /invalid output twice/);
-    assertEquals(always.attempts.get('fit_check'), 2);
+    assertEquals(always.attempts.get('build'), 2);
   } finally {
     always.restore();
   }
@@ -104,7 +109,7 @@ Deno.test('a "go" that fails the checks becomes no-go', async () => {
   const verdict = PASS_FIXTURES.verdict as Record<string, unknown>;
   const fixtures = installFixtures({ reply: (pass) => (pass === 'verdict' ? { ...verdict, checks: { ...(verdict.checks as object), already_exists: true } } : undefined) });
   try {
-    const idea = PASS_FIXTURES.mutate;
+    const idea = PASS_FIXTURES.build.idea;
     const result = await call(runPass, { pass: 'verdict', app_id: SOURCE_ID, audience: 'Dog owners', idea });
     assertEquals(result.body.output.go_no_go, 'no_go');
     assertMatch(result.body.output.reason, /^Marked no-go/);
@@ -115,7 +120,7 @@ Deno.test('a "go" that fails the checks becomes no-go', async () => {
 
 Deno.test('bad requests get a 400 with a reason', async () => {
   assertEquals((await call(runPass, { pass: 'nope', app_id: SOURCE_ID })).status, 400);
-  assertEquals((await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID })).body.error, 'audience is required');
+  assertEquals((await call(runPass, { pass: 'build', app_id: SOURCE_ID })).body.error, 'audience is required');
   assertEquals((await call(runPass, { pass: 'verdict', app_id: SOURCE_ID, audience: 'x', idea: {} })).status, 400);
 });
 
@@ -124,9 +129,9 @@ Deno.test('AI_PROVIDER=claude routes the same pass to Claude', async () => {
   Deno.env.set('ANTHROPIC_API_KEY', 'fixture-key');
   const fixtures = installFixtures();
   try {
-    const result = await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID, audience: 'Travelers' });
+    const result = await call(runPass, { pass: 'build', app_id: SOURCE_ID, audience: 'Travelers' });
     assertEquals(result.status, 200);
-    assertEquals(fixtures.aiRequests.map((request) => request.provider), ['claude']);
+    assertEquals(fixtures.aiRequests.every((request) => request.provider === 'claude'), true);
   } finally {
     fixtures.restore();
     Deno.env.delete('AI_PROVIDER');
@@ -135,11 +140,11 @@ Deno.test('AI_PROVIDER=claude routes the same pass to Claude', async () => {
 });
 
 Deno.test('a Muse reply wrapped in a code fence still parses', async () => {
-  const fixtures = installFixtures({ reply: (pass) => (pass === 'fit_check' ? '```json\n' + JSON.stringify(PASS_FIXTURES.fit_check) + '\n```' : undefined) });
+  const fixtures = installFixtures({ reply: (pass) => (pass === 'build' ? '```json\n' + JSON.stringify(PASS_FIXTURES.build) + '\n```' : undefined) });
   try {
-    const result = await call(runPass, { pass: 'fit_check', app_id: SOURCE_ID, audience: 'Renters' });
+    const result = await call(runPass, { pass: 'build', app_id: SOURCE_ID, audience: 'Renters' });
     assertEquals(result.status, 200);
-    assertEquals(fixtures.attempts.get('fit_check'), 1);
+    assertEquals(fixtures.attempts.get('build'), 1);
   } finally {
     fixtures.restore();
   }
@@ -151,4 +156,21 @@ Deno.test('rate limit: a visitor is stopped after the hourly allowance', () => {
   assertMatch(takeAiCall('203.0.113.9', now) ?? '', /hourly limit/);
   assertEquals(takeAiCall('203.0.113.10', now), null);
   assertEquals(takeAiCall('203.0.113.9', now + 3601 * 1000), null);
+});
+
+Deno.test('build with nothing cached fetches the reviews once and keeps both analyses', async () => {
+  const fixtures = installFixtures();
+  try {
+    // A fresh app ID in another store, so nothing is cached yet.
+    const result = await call(runPass, { pass: 'build', app_id: SOURCE_ID, country: 'gb', audience: 'Renters' });
+    assertEquals(result.status, 200);
+    const feedPage1 = fixtures.calls.filter((path) => path.includes('/gb/rss/customerreviews/page=1/')).length;
+    assertEquals(feedPage1, 1);
+    const again = await call(runPass, { pass: 'dissect', app_id: SOURCE_ID, country: 'gb' });
+    assertEquals(again.body.cached, true);
+    const gapsAgain = await call(runPass, { pass: 'gaps', app_id: SOURCE_ID, country: 'gb' });
+    assertEquals(gapsAgain.body.cached, true);
+  } finally {
+    fixtures.restore();
+  }
 });

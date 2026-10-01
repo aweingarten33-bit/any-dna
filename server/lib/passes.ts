@@ -1,12 +1,12 @@
-// The five passes. Prompts adapted from the workbench prompts:
+// The four AI passes. Prompts adapted from the workbench prompts:
 //   rules for every pass  <- Prompt 1 (Research): evidence only, unknown is a valid answer
 //   dissect               <- Prompts 1 + 2 (Research, Extract DNA): why it works, mechanics not features
-//   mutate                <- Prompt 3 (Generate): real user, repeatable loop, buildable by one person
+//   build (fit + idea)    <- Prompt 3 (Generate): real user, repeatable loop, buildable by one person
 //   verdict               <- Prompt 4 (Filter): the blunt-stranger checks, run against fetched competitors
 // Prompt 3's "never [source] for [X]" rule is left out on purpose: carrying a
 // proven app to a new audience is what Spinoff does. A reskin is still rejected.
 import { structuredCall } from './ai.ts';
-import { dissectSchema, fitCheckSchema, gapsModelSchema, ideaSchema, verdictModelSchema } from './schemas.ts';
+import { buildSchema, dissectSchema, gapsModelSchema, verdictModelSchema } from './schemas.ts';
 import type { AppListing, Competitor, CompetitorListing, Dissect, FitCheck, Gaps, Idea, Review, Verdict } from './types.ts';
 
 const RULES = `You are one step in Spinoff, a tool that takes an app that already works and adapts it for a new audience.
@@ -96,45 +96,33 @@ Your job: find the complaints that repeat across these 1 to 3 star reviews of ${
   return { repeated_complaints: complaints.slice(0, 8) };
 }
 
-// ---- fit_check -----------------------------------------------------------
+// ---- build: fit check + idea in one call --------------------------------
+// One call instead of two saves a full round of waiting. Part 1's judgment is
+// written first, so Part 2 still builds on it.
 
-export async function runFitCheck(app: AppListing, dissect: Dissect, audience: string): Promise<FitCheck> {
+export async function runBuild(app: AppListing, dissect: Dissect, gaps: Gaps, audience: string): Promise<{ fit_check: FitCheck; idea: Idea }> {
+  const carryable = gaps.repeated_complaints.filter((complaint) => complaint.about === 'mechanic');
   const result = await structuredCall({
-    schema: fitCheckSchema,
+    schema: buildSchema,
     effort: 'medium',
     system: `${RULES}
 
-Your job: test whether each mechanic of ${app.name} can work for a new audience: ${audience}.
+You adapt the proven mechanics of ${app.name} for a new audience: ${audience}. Do it in two parts, in order.
 
+PART 1 — components (the fit check).
 Judge each component by one question: does this audience already have the behavior it needs, at the frequency it needs?
 - survives: they already do this, often enough. Keep it as is.
 - adapts: the behavior exists but in a different form or rhythm. Say what changes.
 - breaks: they don't do this. Example: a daily streak breaks for people selling a car, because nobody sells a car daily.
-
 One row each for core_loop, frequency_required, reward_type, retention_lever, monetization_trigger and network_effect, then one row per dependency. Use those plain names as "component".
 - audience_behavior: what this audience actually does today that is relevant, concretely.
 - reason: one or two sentences.
 - replacement: for "adapts", the adapted version. For "breaks", a replacement built on a behavior this audience does have. For "survives", an empty string.
+This is your judgment, not fetched data, so don't present it as fact or cite numbers.
 
-This is your judgment, not fetched data, so don't present it as fact or cite numbers.`,
-    user: `Audience: ${audience}\n\nMechanics of ${app.name} (category: ${app.category}):\n${JSON.stringify(dissect, null, 2)}`,
-  });
-  return { components: result.components.slice(0, 14).map((row) => ({ ...row, replacement: row.status === 'survives' ? '' : row.replacement })) };
-}
-
-// ---- mutate --------------------------------------------------------------
-
-export async function runMutate(app: AppListing, dissect: Dissect, fit: FitCheck, gaps: Gaps, audience: string): Promise<Idea> {
-  const carryable = gaps.repeated_complaints.filter((complaint) => complaint.about === 'mechanic');
-  const idea = await structuredCall({
-    schema: ideaSchema,
-    effort: 'high',
-    system: `${RULES}
-
-Your job: build one new app for ${audience} from the proven mechanics of ${app.name}.
+PART 2 — idea: one new app for ${audience}, built from Part 1.
 - Keep every component that survived. Use the adapted version of every component that adapts. Replace every component that broke with its replacement.
 - Make it different using the incumbent's repeated complaints listed below: design the new app so that complaint can't happen. Only use complaints about how the app works; they are the ones that would follow the mechanic. If none are listed, say there's no review evidence to differentiate on.
-
 The idea must have:
 - A real person in this audience with a real, recurring problem.
 - What the user does inside the app, and what the app does in response.
@@ -142,10 +130,8 @@ The idea must have:
 - A first version one person could build.
 - Consumer-first: one person can adopt it without an employer, admin or procurement.
 - A normal person would understand it in five seconds and want to show it to someone.
-
 Reject before answering: a generic AI assistant, chatbot, dashboard, habit tracker, CRM or checklist; anything vague that can't be described as a specific app; and a reskin. If the only thing that changed from ${app.name} is the topic, you haven't finished: what broke must change how the product works.
-
-Fields:
+Idea fields:
 - name: a short product name.
 - pitch: one sentence, under 20 words.
 - core_loop: how the loop works for this audience.
@@ -153,12 +139,15 @@ Fields:
 - first_session_flow: 3 to 6 steps, what a new user does in their first session.
 - differentiator_from_gaps: the complaint it designs out (name the theme and its review count) and how.
 - search_terms: 3 or 4 short phrases someone in this audience would type into the App Store to find an app that does this job. Not the product name.`,
-    user: `Audience: ${audience}\n\nSource app: ${app.name} (${app.category})\n\nMechanics:\n${JSON.stringify(dissect, null, 2)}\n\nFit check for ${audience}:\n${JSON.stringify(fit.components, null, 2)}\n\nRepeated complaints about how ${app.name} works (counted from fetched reviews):\n${carryable.length ? carryable.map((complaint) => `- ${complaint.theme} (${complaint.evidence_count} reviews)`).join('\n') : '(none found)'}`,
+    user: `Audience: ${audience}\n\nSource app: ${app.name} (category: ${app.category})\n\nMechanics:\n${JSON.stringify(dissect, null, 2)}\n\nRepeated complaints about how ${app.name} works (counted from fetched reviews):\n${carryable.length ? carryable.map((complaint) => `- ${complaint.theme} (${complaint.evidence_count} reviews)`).join('\n') : '(none found)'}`,
   });
   return {
-    ...idea,
-    first_session_flow: idea.first_session_flow.slice(0, 6),
-    search_terms: idea.search_terms.map((term) => term.trim()).filter(Boolean).slice(0, 4),
+    fit_check: { components: result.components.slice(0, 14).map((row) => ({ ...row, replacement: row.status === 'survives' ? '' : row.replacement })) },
+    idea: {
+      ...result.idea,
+      first_session_flow: result.idea.first_session_flow.slice(0, 6),
+      search_terms: result.idea.search_terms.map((term) => term.trim()).filter(Boolean).slice(0, 4),
+    },
   };
 }
 
@@ -171,7 +160,7 @@ export async function runVerdict(idea: Idea, audience: string, searched: Competi
   }));
   const result = await structuredCall({
     schema: verdictModelSchema,
-    effort: 'high',
+    effort: 'medium',
     system: `${RULES}
 
 You are a blunt stranger seeing this pitch for the first time. You know nothing about the app it came from.

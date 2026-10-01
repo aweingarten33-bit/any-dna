@@ -43,6 +43,9 @@ export const ideaSchema = z.object({
   search_terms: z.array(z.string()),
 });
 
+/** Fit check and idea from one call. */
+export const buildSchema = z.object({ components: fitCheckSchema.shape.components, idea: ideaSchema });
+
 /** The model may only point at apps from the fetched list, by ID; code fills in names and prices. */
 export const verdictModelSchema = z.object({
   competitors: z.array(z.object({ app_id: z.string(), overlap: z.string() })),

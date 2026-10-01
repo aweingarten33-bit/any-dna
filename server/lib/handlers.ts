@@ -3,9 +3,9 @@
 import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
 import { PassError } from './ai.ts';
 import { AppStoreError, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
-import { runDissect, runFitCheck, runGaps, runMutate, runVerdict } from './passes.ts';
+import { runBuild, runDissect, runGaps, runVerdict } from './passes.ts';
 import { getLowStarReviews, reviewProvider } from './reviews.ts';
-import { fitCheckSchema, ideaSchema } from './schemas.ts';
+import { ideaSchema } from './schemas.ts';
 import type { AppListing, PassName, Review, ReviewsSummary } from './types.ts';
 
 const CORS = {
@@ -62,7 +62,27 @@ export const resolveApp = serve(async (body) => {
 
 // ---- Step 2: get_reviews -------------------------------------------------
 
-async function ensureListing(appId: string, country: string): Promise<AppListing> {
+// Steps now run in parallel (dissect and gaps, or two visitors on the same
+// app), so the same fetch or AI call can be asked for twice at once. Share one
+// in-flight job per key instead of doing the work twice.
+const inflight = new Map<string, Promise<unknown>>();
+function once<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const running = inflight.get(key) as Promise<T> | undefined;
+  if (running) return running;
+  const job = work().finally(() => inflight.delete(key));
+  inflight.set(key, job);
+  return job;
+}
+
+function ensureListing(appId: string, country: string): Promise<AppListing> {
+  return once(`listing:${country}:${appId}`, () => loadListing(appId, country));
+}
+
+function ensureReviews(appId: string, country: string, refresh = false): Promise<{ summary: ReviewsSummary; reviews: Review[] }> {
+  return once(`reviews:${country}:${appId}:${refresh}`, () => loadReviews(appId, country, refresh));
+}
+
+async function loadListing(appId: string, country: string): Promise<AppListing> {
   const row = await getRow(appId, country);
   if (row?.listing_json && isFresh(row.fetched_at, LISTING_TTL_MS)) return row.listing_json;
   const listing = await lookupApp(appId, country);
@@ -71,7 +91,7 @@ async function ensureListing(appId: string, country: string): Promise<AppListing
   return listing;
 }
 
-async function ensureReviews(appId: string, country: string, refresh = false): Promise<{ summary: ReviewsSummary; reviews: Review[] }> {
+async function loadReviews(appId: string, country: string, refresh: boolean): Promise<{ summary: ReviewsSummary; reviews: Review[] }> {
   const row = await getRow(appId, country);
   if (!refresh && row?.reviews_json && isFresh(row.reviews_fetched_at, REVIEWS_TTL_MS)) return row.reviews_json;
   const provider = reviewProvider();
@@ -98,7 +118,15 @@ async function context(appId: string, country: string) {
   return { listing, reviews, analysis: row?.analysis_json ?? {} };
 }
 
-async function ensureDissect(appId: string, country: string) {
+function ensureDissect(appId: string, country: string) {
+  return once(`dissect:${country}:${appId}`, () => loadDissect(appId, country));
+}
+
+function ensureGaps(appId: string, country: string) {
+  return once(`gaps:${country}:${appId}`, () => loadGaps(appId, country));
+}
+
+async function loadDissect(appId: string, country: string) {
   const { listing, reviews, analysis } = await context(appId, country);
   if (analysis.dissect) return { listing, output: analysis.dissect, cached: true };
   const output = await runDissect(listing, reviews);
@@ -106,7 +134,7 @@ async function ensureDissect(appId: string, country: string) {
   return { listing, output, cached: false };
 }
 
-async function ensureGaps(appId: string, country: string) {
+async function loadGaps(appId: string, country: string) {
   const { listing, reviews, analysis } = await context(appId, country);
   if (analysis.gaps) return { output: analysis.gaps, cached: true };
   const output = await runGaps(listing, reviews);
@@ -114,7 +142,7 @@ async function ensureGaps(appId: string, country: string) {
   return { output, cached: false };
 }
 
-const PASSES: PassName[] = ['dissect', 'gaps', 'fit_check', 'mutate', 'verdict'];
+const PASSES: PassName[] = ['dissect', 'gaps', 'build', 'verdict'];
 
 export const runPass = serve(async (body) => {
   const pass = body.pass as PassName;
@@ -126,20 +154,13 @@ export const runPass = serve(async (body) => {
   if (pass === 'gaps') return ensureGaps(appId, country);
 
   const audience = text(body.audience, 'audience', 80);
-  if (pass === 'fit_check') {
-    const { listing, output: dissect } = await ensureDissect(appId, country);
-    return { output: await runFitCheck(listing, dissect, audience) };
-  }
-  if (pass === 'mutate') {
-    const fit = fitCheckSchema.safeParse(body.fit_check);
-    if (!fit.success) throw new HttpError(400, 'mutate needs the fit_check output');
-    const { listing, output: dissect } = await ensureDissect(appId, country);
-    const { output: gaps } = await ensureGaps(appId, country);
-    return { output: await runMutate(listing, dissect, fit.data, gaps, audience) };
+  if (pass === 'build') {
+    const [{ listing, output: dissect }, { output: gaps }] = await Promise.all([ensureDissect(appId, country), ensureGaps(appId, country)]);
+    return { output: await runBuild(listing, dissect, gaps, audience) };
   }
   // verdict: search the store for the new idea, then judge it against what came back.
   const idea = ideaSchema.safeParse(body.idea);
-  if (!idea.success) throw new HttpError(400, 'verdict needs the mutate output');
+  if (!idea.success) throw new HttpError(400, 'verdict needs the idea from the build step');
   const searched = await searchCompetitors(idea.data.search_terms, country, appId);
   return { output: await runVerdict(idea.data, audience, searched), searched };
 });

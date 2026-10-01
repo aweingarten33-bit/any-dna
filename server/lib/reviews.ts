@@ -18,34 +18,38 @@ type FeedEntry = {
   'im:rating'?: { label?: string };
 };
 
+async function fetchFeedPage(appId: string, country: string, page: number): Promise<Review[] | null> {
+  const url = `https://itunes.apple.com/${country}/rss/customerreviews/page=${page}/id=${appId}/sortby=mostrecent/json`;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) return null;
+    const data = JSON.parse(await response.text());
+    const raw = data?.feed?.entry;
+    const entries: FeedEntry[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    return entries
+      .filter((entry) => entry['im:rating']?.label)
+      .map((entry) => ({
+        id: entry.id?.label ?? crypto.randomUUID(),
+        rating: Number(entry['im:rating']?.label),
+        title: entry.title?.label ?? '',
+        body: entry.content?.label ?? '',
+        updated: entry.updated?.label ?? null,
+      }));
+  } catch {
+    return null;
+  }
+}
+
 export const appleRssProvider: ReviewProvider = {
   name: 'apple-rss',
   async fetchRecent(appId, country) {
+    // The feed serves up to 10 pages of 50. Fetch them all at once, then keep
+    // pages in order up to the first empty or failed one.
+    const pages = await Promise.all(Array.from({ length: 10 }, (_, index) => fetchFeedPage(appId, country, index + 1)));
     const reviews: Review[] = [];
-    // The feed serves up to 10 pages of 50. Stop at the first empty or failed page.
-    for (let page = 1; page <= 10; page += 1) {
-      const url = `https://itunes.apple.com/${country}/rss/customerreviews/page=${page}/id=${appId}/sortby=mostrecent/json`;
-      let entries: FeedEntry[] = [];
-      try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-        if (!response.ok) break;
-        const data = JSON.parse(await response.text());
-        const raw = data?.feed?.entry;
-        entries = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      } catch {
-        break;
-      }
-      const parsed = entries
-        .filter((entry) => entry['im:rating']?.label)
-        .map((entry) => ({
-          id: entry.id?.label ?? crypto.randomUUID(),
-          rating: Number(entry['im:rating']?.label),
-          title: entry.title?.label ?? '',
-          body: entry.content?.label ?? '',
-          updated: entry.updated?.label ?? null,
-        }));
-      if (!parsed.length) break;
-      reviews.push(...parsed);
+    for (const page of pages) {
+      if (!page?.length) break;
+      reviews.push(...page);
     }
     return reviews;
   },

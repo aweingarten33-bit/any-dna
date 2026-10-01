@@ -46,7 +46,7 @@ server/
   main.ts                    the web server: /api routes, rate limits, static files
   schema.sql                 app_cache and ideas tables (applied on startup)
   lib/handlers.ts            resolve-app · get-reviews · run-pass
-  lib/passes.ts              the prompts: dissect · gaps · fit_check · mutate · verdict
+  lib/passes.ts              the prompts: dissect · gaps · build (fit check + idea) · verdict
   lib/ai.ts                  one structured AI call: validate with Zod, retry once
   lib/muse.ts, lib/claude.ts the AI providers
   lib/itunes.ts              Apple's App Store API
@@ -56,7 +56,7 @@ dev/                         local API server + fictional fixture data for demo 
 tests/                       pipeline tests (Deno)
 ```
 
-Each pass is its own request, so no single request runs long. Each pass returns JSON matching a schema, is validated with Zod, and is retried once if invalid. The `dissect` and `gaps` passes don't depend on the audience, so they're cached next to the listing and reviews.
+Each pass is its own request, so no single request runs long. A run is 4 AI calls in 3 rounds: reading the app and mining the reviews run at the same time, then the build (fit check and idea in one call), then the verdict. The loading screen shows each finding as it arrives. Each pass returns JSON matching a schema, is validated with Zod, and is retried once if invalid. The `dissect` and `gaps` passes don't depend on the audience, so they're cached next to the listing and reviews.
 
 ### AI provider
 
@@ -70,7 +70,7 @@ The pass prompts are adapted from the four workbench prompts:
 
 - **Prompt 1 (Research)** supplies the rules every pass follows: use only the supplied data, separate what happened from why, and treat "unknown" as a correct answer.
 - **Prompts 1 and 2 (Research, Extract DNA)** feed `dissect`: why the app works, not what it is, with mechanics stripped of their topic and the HotelTonight/GasBuddy depth examples.
-- **Prompt 3 (Generate)** feeds `mutate`: a real user, a repeatable loop, buildable by one person, consumer-first, the 5-second test, and no generic assistants or habit trackers. The "[source] for [X]" rejection is dropped on purpose, since moving a proven app to a new audience is what Spinoff does. A plain reskin is still rejected.
+- **Prompt 3 (Generate)** feeds `build` (the fit check and the idea, written in one call): a real user, a repeatable loop, buildable by one person, consumer-first, the 5-second test, and no generic assistants or habit trackers. The "[source] for [X]" rejection is dropped on purpose, since moving a proven app to a new audience is what Spinoff does. A plain reskin is still rejected.
 - **Prompt 4 (Filter)** becomes `verdict`: the blunt-stranger checks, run against the fetched competitor list instead of memory.
 
 The prompts' mode instructions (Repurpose, ×1000, 2056, Different Angle, Collide) aren't used.
@@ -92,7 +92,7 @@ Environment variables:
 | `META_MODEL_API_KEY` | **yes** | | Muse key from the Meta Model API |
 | `META_MODEL` | no | `muse-spark-1.3` | Muse model (standard tier only) |
 | `DATABASE_URL` | no | memory | Postgres for the App Store cache. Without it the cache resets on every deploy, which only costs speed. |
-| `AI_CALLS_PER_HOUR` | no | `30` | Per visitor (one full run is 5 calls) |
+| `AI_CALLS_PER_HOUR` | no | `30` | Per visitor (one full run is 4 calls) |
 | `AI_CALLS_PER_DAY` | no | `300` | Across all visitors; caps what strangers can spend |
 | `REVIEW_PROVIDER` | no | `apple-rss` | `apple-rss`, `scraper` (fill in `scraperProvider` in `server/lib/reviews.ts`), or `none` |
 

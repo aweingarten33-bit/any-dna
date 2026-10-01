@@ -44,7 +44,8 @@ function reviewFeed() {
 }
 
 // The low-star reviews arrive in feed order, so the gaps pass sees them as r1..r8.
-export const PASS_FIXTURES: Record<string, unknown> = {
+// deno-lint-ignore no-explicit-any
+const PARTS: Record<string, any> = {
   dissect: {
     core_loop: 'Do one small action once a day, check in, and watch an unbroken count grow.',
     frequency_required: 'Daily. The loop breaks if a day is missed.',
@@ -98,11 +99,18 @@ export const PASS_FIXTURES: Record<string, unknown> = {
   },
 };
 
+// deno-lint-ignore no-explicit-any
+export const PASS_FIXTURES: Record<string, any> = {
+  dissect: PARTS.dissect,
+  gaps: PARTS.gaps,
+  build: { components: PARTS.fit_check.components, idea: PARTS.mutate },
+  verdict: PARTS.verdict,
+};
+
 function whichPass(system: string) {
   if (system.includes('understand why this app works')) return 'dissect';
   if (system.includes('find the complaints that repeat')) return 'gaps';
-  if (system.includes('test whether each mechanic')) return 'fit_check';
-  if (system.includes('build one new app')) return 'mutate';
+  if (system.includes('You adapt the proven mechanics')) return 'build';
   if (system.includes('blunt stranger')) return 'verdict';
   throw new Error('Unknown pass prompt');
 }

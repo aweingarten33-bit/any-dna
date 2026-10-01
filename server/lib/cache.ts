@@ -76,7 +76,20 @@ export function saveReviews(appId: string, country: string, summary: ReviewsSumm
   return upsert({ app_id: appId, country, reviews_json: { summary, reviews }, reviews_fetched_at: summary.fetched_at, analysis_json: {} });
 }
 
+/**
+ * Adds passes to the cached analysis. dissect and gaps finish at about the
+ * same time, so this merges in one step instead of read-then-write, which
+ * would let one of them erase the other.
+ */
 export async function saveAnalysis(appId: string, country: string, patch: CachedAnalysis) {
-  const current = await getRow(appId, country);
-  return upsert({ app_id: appId, country, analysis_json: { ...(current?.analysis_json ?? {}), ...patch } });
+  const client = db();
+  if (!client) {
+    const key = `${country}:${appId}`;
+    const current = memory.get(key) ?? { app_id: appId, country, listing_json: null, reviews_json: null, analysis_json: {}, fetched_at: null, reviews_fetched_at: null };
+    memory.set(key, { ...current, analysis_json: { ...current.analysis_json, ...patch } });
+    return;
+  }
+  const value = client.json(patch as postgres.JSONValue);
+  await client`insert into app_cache (app_id, country, analysis_json) values (${appId}, ${country}, ${value})
+    on conflict (app_id, country) do update set analysis_json = app_cache.analysis_json || excluded.analysis_json`;
 }

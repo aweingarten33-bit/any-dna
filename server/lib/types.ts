@@ -110,13 +110,12 @@ export type Verdict = {
   };
 };
 
-export type PassName = 'dissect' | 'gaps' | 'fit_check' | 'mutate' | 'verdict';
+export type PassName = 'dissect' | 'gaps' | 'build' | 'verdict';
 
 export type PassOutputs = {
   dissect: Dissect;
   gaps: Gaps;
-  fit_check: FitCheck;
-  mutate: Idea;
+  build: { fit_check: FitCheck; idea: Idea };
   verdict: Verdict;
 };
 

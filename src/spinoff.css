@@ -369,3 +369,29 @@
 .saved-link:hover { text-decoration-color: var(--paper); }
 .saved-delete { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: none; border: 1px solid var(--hair); color: var(--paper-3); }
 .saved-delete:hover { color: var(--breaks); border-color: rgba(255, 122, 107, 0.4); }
+
+/* ---------- Loading: findings as they arrive ---------- */
+.meter.is-compact .meter-num { font-size: clamp(64px, 20vw, 96px); }
+.meter.is-compact .meter-pct { font-size: 26px; }
+.meter-num, .meter-pct { transition: font-size 0.6s var(--out); }
+.feed { display: grid; gap: 10px; margin-top: 22px; }
+.find {
+  display: grid; gap: 8px; padding: 16px 18px; border-radius: 20px;
+  background: rgba(244, 241, 234, 0.04); border: 1px solid var(--hair);
+  animation: find-in 0.7s var(--out) both;
+}
+.find:first-child { border-color: rgba(139, 92, 246, 0.45); box-shadow: 0 20px 50px -30px rgba(139, 92, 246, 0.6); }
+@keyframes find-in { from { opacity: 0; transform: translateY(-10px) scale(0.98); } to { opacity: 1; transform: none; } }
+.find-k { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--paper-3); }
+.find-big { font-size: 40px; font-weight: 600; letter-spacing: -0.05em; line-height: 1; color: var(--paper); }
+.find-big span { font-size: 15px; font-weight: 400; letter-spacing: 0; color: var(--paper-2); margin-left: 8px; }
+.find-quote { font-family: var(--serif); font-style: italic; font-size: 21px; line-height: 1.25; color: var(--paper); }
+.find-quote.is-small { font-size: 17px; color: var(--paper-2); }
+.find-title { font-size: 17px; font-weight: 500; letter-spacing: -0.015em; color: var(--paper); }
+.find-title b { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--paper-3); margin-left: 6px; white-space: nowrap; }
+.find-name { font-size: 40px; font-weight: 600; letter-spacing: -0.05em; line-height: 1; background: var(--ink-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.find-icons { display: flex; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .find { animation: none; } }
+.feed { margin: 18px 0 8px; }
+.rail.is-compact li { padding: 11px 2px; }
+.rail.is-compact .rail-label { font-size: 15px; }

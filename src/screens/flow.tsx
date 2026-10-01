@@ -2,7 +2,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ArrowRight, ArrowUpRight, Check, RefreshCw, X } from 'lucide-react';
 import { AppIcon, Fade, Marquee, Screen, Source, Split, compact, price } from '@/components/bits';
-import { STEPS, useRun, type StepState } from '@/lib/run';
+import { STEPS, useRun, type Progress, type StepState } from '@/lib/run';
 import type { AppListing, Blueprint } from '../../server/lib/types.ts';
 
 export function Confirm({ candidates, index, onYes, onNext, onSearchAgain }: {
@@ -115,8 +115,9 @@ function useMeter(states: Record<string, StepState>) {
 }
 
 export function Loading({ app, audience, onDone, onBack }: { app: AppListing; audience: string; onDone: (blueprint: Blueprint) => void; onBack: () => void }) {
-  const { states, error, retry } = useRun(app, audience, onDone);
+  const { states, progress, error, retry } = useRun(app, audience, onDone);
   const meter = useMeter(states);
+  const findings = Findings({ app, progress });
   return <Screen n="03" label="The blueprint" title="Building your blueprint"
     sub={<span className="route"><span>{app.name}</span><ArrowRight size={14} /><span>{audience}</span></span>}
     actions={error
@@ -125,11 +126,12 @@ export function Loading({ app, audience, onDone, onBack }: { app: AppListing; au
           <button type="button" className="btn-pill" onClick={onBack}><span>Go back</span></button>
         </>
       : <button type="button" className="btn-pill" onClick={onBack}><span>Cancel</span></button>}>
-    <div className="meter fade" style={{ '--d': '240ms' } as CSSProperties} aria-hidden="true">
+    <div className={`meter fade${findings.length ? ' is-compact' : ''}`} style={{ '--d': '240ms' } as CSSProperties} aria-hidden="true">
       <span className="meter-num">{meter}</span><span className="meter-pct">%</span>
     </div>
     <div className="meter-rail" aria-hidden="true"><i style={{ transform: `scaleX(${meter / 100})` }} /></div>
-    <ol className="rail" aria-live="polite">
+    {findings.length > 0 && <section className="feed" aria-label="Found so far" aria-live="polite">{findings}</section>}
+    <ol className={`rail${findings.length ? ' is-compact' : ''}`} aria-live="polite">
       {STEPS.map((step, i) => {
         const state = states[step.id];
         return <li key={step.id} className={`is-${state}`}>
@@ -142,6 +144,38 @@ export function Loading({ app, audience, onDone, onBack }: { app: AppListing; au
         </li>;
       })}
     </ol>
-    {error ? <p className="flow-error" role="alert">{error}</p> : <p className="screen-note">Usually a minute or two. If a step fails, the finished ones are kept.</p>}
+    {error ? <p className="flow-error" role="alert">{error}</p> : !findings.length && <p className="screen-note">What we find shows up here as it comes in. If a step fails, the finished ones are kept.</p>}
   </Screen>;
+}
+
+/** Cards for what each finished step found, newest first. */
+function Findings({ app, progress }: { app: AppListing; progress: Progress }) {
+  const cards = [];
+  const { reviews, dissect, gaps, idea, verdict, searched } = progress;
+  if (reviews) cards.push(<article key="reviews" className="find">
+    <p className="find-k">Reviews</p>
+    <p className="find-big">{reviews.low_star_count}<span> recent 1 to 3 star reviews of {app.name}</span></p>
+  </article>);
+  if (dissect) cards.push(<article key="dissect" className="find">
+    <p className="find-k">Why {app.name} works</p>
+    <p className="find-quote">{dissect.why_it_works}</p>
+  </article>);
+  const top = gaps?.repeated_complaints[0];
+  if (gaps) cards.push(<article key="gaps" className="find">
+    <p className="find-k">Top complaint</p>
+    {top
+      ? <><p className="find-title">{top.theme} <b>{top.evidence_count} reviews</b></p>{top.example && <p className="find-quote is-small">“{top.example}”</p>}</>
+      : <p className="find-title">No complaint repeats across reviews.</p>}
+  </article>);
+  if (idea) cards.push(<article key="idea" className="find">
+    <p className="find-k">The idea</p>
+    <p className="find-name">{idea.name}</p>
+    <p className="find-quote is-small">{idea.pitch}</p>
+  </article>);
+  if (verdict && searched) cards.push(<article key="verdict" className="find">
+    <p className="find-k">Competitors</p>
+    <p className="find-title">{verdict.competitors.length ? `${verdict.competitors.length} overlap, out of ${searched.length} apps checked` : `None overlap, out of ${searched.length} apps checked`}</p>
+    {verdict.competitors.length > 0 && <div className="find-icons">{verdict.competitors.map((comp) => <AppIcon key={comp.app_id} app={comp} size={36} />)}</div>}
+  </article>);
+  return cards.reverse();
 }

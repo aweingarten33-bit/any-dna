@@ -7,7 +7,7 @@
 //   PORT                  port to listen on (Render sets this; default 8000)
 //   META_MODEL_API_KEY    Muse key (the AI provider). See server/lib/ai.ts
 //   DATABASE_URL          optional Postgres for the app_cache; memory otherwise
-//   AI_CALLS_PER_HOUR     per-visitor limit on AI calls (default 30, about 6 runs)
+//   AI_CALLS_PER_HOUR     per-visitor limit on AI calls (default 30, about 7 runs)
 //   AI_CALLS_PER_DAY      limit across all visitors (default 300)
 import { serveDir, serveFile } from 'jsr:@std/http@^1/file-server';
 import { getReviews, resolveApp, runPass } from './lib/handlers.ts';

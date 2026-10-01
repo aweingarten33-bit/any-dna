@@ -33,10 +33,8 @@ export const api = {
     post<{ output: Dissect }>('run-pass', { pass: 'dissect', app_id: app.app_id, country: app.country }, signal),
   gaps: (app: AppListing, signal?: AbortSignal) =>
     post<{ output: Gaps }>('run-pass', { pass: 'gaps', app_id: app.app_id, country: app.country }, signal),
-  fitCheck: (app: AppListing, audience: string, signal?: AbortSignal) =>
-    post<{ output: FitCheck }>('run-pass', { pass: 'fit_check', app_id: app.app_id, country: app.country, audience }, signal),
-  mutate: (app: AppListing, audience: string, fit_check: FitCheck, signal?: AbortSignal) =>
-    post<{ output: Idea }>('run-pass', { pass: 'mutate', app_id: app.app_id, country: app.country, audience, fit_check }, signal),
+  build: (app: AppListing, audience: string, signal?: AbortSignal) =>
+    post<{ output: { fit_check: FitCheck; idea: Idea } }>('run-pass', { pass: 'build', app_id: app.app_id, country: app.country, audience }, signal),
   verdict: (app: AppListing, audience: string, idea: Idea, signal?: AbortSignal) =>
     post<{ output: Verdict; searched: CompetitorListing[] }>('run-pass', { pass: 'verdict', app_id: app.app_id, country: app.country, audience, idea }, signal),
 };
