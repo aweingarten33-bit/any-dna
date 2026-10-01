@@ -34,11 +34,9 @@ function toContent(user: GenerateRequest['user']) {
 }
 
 export async function claudeGenerate(req: GenerateRequest): Promise<{ text: string; truncated: boolean }> {
-  // Structured outputs constrain the reply to the schema. Fallbacks re-run a
-  // request the safety classifiers decline on Anthropic's recommended model.
   const response = await anthropic().beta.messages.create({
     model: MODEL,
-    max_tokens: 16000,
+    max_tokens: req.maxOutputTokens ?? 16000,
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
     output_config: { effort: req.effort, format: { type: 'json_schema', schema: req.schema } },
