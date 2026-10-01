@@ -23,6 +23,8 @@ export type GenerateRequest = {
   /** JSON Schema the reply must match. */
   schema: Record<string, unknown>;
   effort: Effort;
+  /** Optional hard ceiling for short, latency-sensitive calls. */
+  maxOutputTokens?: number;
 };
 
 /** Splits a data: URL into its MIME type and base64 body. */
@@ -63,6 +65,7 @@ export async function structuredCall<T extends z.ZodType>(opts: {
   user: string | UserContent[];
   schema: T;
   effort?: Effort;
+  maxOutputTokens?: number;
 }): Promise<z.infer<T>> {
   const provider = activeProvider();
   const generate = provider === 'muse' ? museGenerate : claudeGenerate;
@@ -74,7 +77,7 @@ export async function structuredCall<T extends z.ZodType>(opts: {
       const note = `\n\nYour previous reply was rejected: ${lastError}\nReturn only JSON that matches the schema.`;
       user = typeof user === 'string' ? `${user}${note}` : [...user, { type: 'text' as const, text: note }];
     }
-    const reply = await generate({ system: opts.system, user, schema, effort: opts.effort ?? 'medium' });
+    const reply = await generate({ system: opts.system, user, schema, effort: opts.effort ?? 'medium', maxOutputTokens: opts.maxOutputTokens });
     if (reply.truncated) { lastError = 'the reply was cut off at the length limit'; continue; }
     let json: unknown;
     try {
