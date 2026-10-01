@@ -65,8 +65,9 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     {topBar}
     <main className="home">
       <section className="hero" aria-label="Start">
-        <h1><span className="line">Drop anything.</span><br /><span className="line">Get an app idea.</span></h1>
-        <p className="hero-sub">A link, an image, a video or song, a document, or your own words. The app idea comes straight from it.</p>
+        <h1><span className="line">Turn anything into</span><br /><span className="line">a new app idea.</span></h1>
+        <p className="hero-sub">Drop in an app, product, photo, video, song, document, link, conversation, or idea. We find the reusable DNA inside it and turn that into new software apps.</p>
+        <p className="home-privacy">Drop something → pick who it’s for → choose a direction → get 3 app ideas.</p>
       </section>
       <div className="drop-row">
         <button type="button" className="btn-pill" disabled={active} onClick={() => choose('link')} data-testid="button-link"><Link2 size={18} /><span>Link</span></button>
