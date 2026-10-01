@@ -119,7 +119,7 @@ export function Composer({ placeholder, busy, onSubmit, options, option, onOptio
           onChange={(event) => setText(event.target.value)}
           placeholder={dictation.listening ? 'Listening…' : placeholder}
           aria-label={placeholder}
-          maxLength={500}
+          maxLength={4000}
           enterKeyHint="send"
           autoCapitalize="off"
           autoCorrect="off"

@@ -4,7 +4,7 @@ Drop anything (a photo, a video, a song, a document, or a few words), say who it
 
 ## The flow
 
-1. **Drop anything.** A pasted Spotify, Apple Music, YouTube, TikTok, Instagram or GitHub link, a photo, video (4 still frames are taken on the phone), song (its title and artist are read from the file), PDF, Word doc, or typed words such as a song title.
+1. **Drop anything.** Five kinds of source, as buttons and behind the +: Link, Image, Video / Audio, Document / Data, Text / Conversation. A link can also be pasted straight into the typing box. Supported: a pasted Spotify, Apple Music, YouTube, TikTok, Instagram or GitHub link, a photo, video (4 still frames are taken on the phone), song (its title and artist are read from the file), PDF, Word doc, or typed words such as a song title.
 2. **Who's it for.** Suggested audiences for the upload, a free-text option, and an optional "Anything else?" box for the niche or the feel.
 3. **How should it think?** An optional mode (Repurpose, ×1000, 30 years from now, Different angle, or Collide with a second source), and optional templates, each a trick from a real app (a countdown like Too Good To Go, a map like Find My, a streak like Duolingo...), shown with a preview of the screen it makes.
 4. **Inventing your app.** The four canonical prompts run in order (below). What each stage finds appears as it lands. If the upload names a song or film the AI doesn't actually know, it asks the user what it's about instead of guessing.
