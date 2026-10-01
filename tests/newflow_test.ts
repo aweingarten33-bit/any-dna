@@ -141,3 +141,20 @@ Deno.test('a Word document is read as text, never sent as a file', async () => {
     fixtures.restore();
   }
 });
+
+Deno.test('a video arrives as still frames, each sent to Muse as an image, in order', async () => {
+  const fixtures = installFixtures();
+  try {
+    const frames = ['data:image/jpeg;base64,AAA1', 'data:image/jpeg;base64,AAA2', 'data:image/jpeg;base64,AAA3'];
+    const read = await flowCall({ pass: 'read', upload: { kind: 'video', frames, filename: 'clip.mov' }, audience: 'Concertgoers' });
+    assertEquals(read.status, 200);
+    const input = JSON.stringify(fixtures.aiRequests.find((r) => r.provider === 'muse')?.body.input);
+    assertEquals(input.match(/"type":"input_image"/g)?.length, 3);
+    assert(input.indexOf('AAA1') < input.indexOf('AAA3'), 'frames stay in order');
+    assertMatch(input, /3 still frames/);
+    const broken = await flowCall({ pass: 'read', upload: { kind: 'video', frames: ['not an image'], filename: 'x.mov' }, audience: 'x' });
+    assertEquals(broken.status, 400);
+  } finally {
+    fixtures.restore();
+  }
+});

@@ -154,6 +154,8 @@ export type Blueprint = {
 export type Upload =
   | { kind: 'text'; text: string }
   | { kind: 'photo'; dataUrl: string; filename: string }
+  /** Still frames taken on the phone; the video itself is never uploaded. */
+  | { kind: 'video'; frames: string[]; filename: string }
   | { kind: 'document'; dataUrl: string; filename: string };
 
 /** The full output of the new generate pass. */

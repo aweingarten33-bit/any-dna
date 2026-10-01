@@ -274,7 +274,7 @@ function docxText(dataUrl: string): string {
     .join('\n');
 }
 
-type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown };
+type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown; frames?: unknown };
 
 async function normalizeUpload(raw: unknown): Promise<UploadInput> {
   const body = (raw ?? {}) as RawUpload;
@@ -283,6 +283,12 @@ async function normalizeUpload(raw: unknown): Promise<UploadInput> {
     const text = typeof body.text === 'string' ? body.text.trim() : '';
     if (!text) throw new HttpError(400, 'Describe what you want an app about.');
     return { kind: 'text', text: text.slice(0, 4000), label: 'their words' };
+  }
+  if (body.kind === 'video') {
+    const frames = Array.isArray(body.frames) ? body.frames.filter((frame): frame is string => typeof frame === 'string').slice(0, 6) : [];
+    if (!frames.length || frames.some((frame) => !/^data:image\/(jpeg|png|webp);base64,/.test(frame))) throw new HttpError(400, 'That video arrived broken. Try again.');
+    if (frames.reduce((total, frame) => total + dataUrlBytes(frame), 0) > MAX_UPLOAD_BYTES) throw new HttpError(400, 'That video is too big. Try a shorter one.');
+    return { kind: 'video', frames, label: filename };
   }
   const dataUrl = typeof body.dataUrl === 'string' ? body.dataUrl : '';
   if (!dataUrl.startsWith('data:')) throw new HttpError(400, 'That upload arrived broken. Try again.');
@@ -303,7 +309,7 @@ async function normalizeUpload(raw: unknown): Promise<UploadInput> {
     }
     throw new HttpError(400, 'That document is in a format we cannot read. Try a PDF or Word document.');
   }
-  throw new HttpError(400, 'Tell us what you uploaded: a photo, a document, or words.');
+  throw new HttpError(400, 'Tell us what you uploaded: a photo, a video, a document, or words.');
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -315,7 +321,7 @@ async function sha256Hex(input: string): Promise<string> {
 async function flowKey(pass: string, body: Record<string, unknown>): Promise<string> {
   const raw = (body.upload ?? {}) as RawUpload;
   const uploadRef = pass === 'suggest' || pass === 'read'
-    ? await sha256Hex(`${raw.kind}:${typeof raw.dataUrl === 'string' ? raw.dataUrl : typeof raw.text === 'string' ? raw.text : ''}`)
+    ? await sha256Hex(`${raw.kind}:${typeof raw.dataUrl === 'string' ? raw.dataUrl : Array.isArray(raw.frames) ? raw.frames.join('|') : typeof raw.text === 'string' ? raw.text : ''}`)
     : null;
   return sha256Hex(JSON.stringify([pass, uploadRef, { ...body, upload: undefined }]));
 }

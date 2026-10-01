@@ -519,8 +519,8 @@
 /* ---- New front door: home ---- */
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .hero-sub { max-width: 30em; margin: 0 auto; padding: 0 20px; font-size: 16.5px; line-height: 1.5; color: rgba(244, 241, 234, 0.72); text-align: center; }
-.drop-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 0 20px; }
-.drop-row .btn-pill { min-width: 132px; justify-content: center; gap: 10px; background: rgba(20, 30, 58, 0.55); border-color: rgba(190, 210, 255, 0.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.drop-row { display: grid; grid-template-columns: repeat(2, minmax(0, 150px)); justify-content: center; gap: 10px; padding: 0 20px; }
+.drop-row .btn-pill { min-width: 0; justify-content: center; gap: 10px; background: rgba(20, 30, 58, 0.55); border-color: rgba(190, 210, 255, 0.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .home-error { margin: 0 auto; max-width: 28em; padding: 12px 16px; border-radius: 16px; font-size: 14.5px; text-align: center; color: #ffd2cc; background: rgba(255, 122, 107, 0.12); border: 1px solid rgba(255, 122, 107, 0.35); }
 .home-privacy { text-align: center; font-size: 12.5px; color: rgba(244, 241, 234, 0.5); padding: 0 20px; }
 
