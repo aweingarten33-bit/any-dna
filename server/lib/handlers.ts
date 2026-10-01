@@ -133,13 +133,13 @@ async function normalizeUpload(raw: unknown): Promise<UploadInput> {
     try {
       info = await readLink(url);
     } catch (error) {
-      throw new HttpError(400, error instanceof LinkError && error.message !== 'unsupported' ? error.message : 'Paste a Spotify, Apple Music, YouTube, TikTok or Instagram link.');
+      throw new HttpError(400, error instanceof LinkError && error.message !== 'unsupported' ? error.message : 'Paste a Spotify, Apple Music, YouTube, TikTok, Instagram or GitHub link.');
     }
     const service = LINK_NAMES[info.source];
     const text = [
       `${service} ${info.kind}: “${info.title || 'untitled'}”${info.creator ? ` by ${info.creator}` : ''}`,
       info.detail ? `Details: ${info.detail}` : '',
-    ].filter(Boolean).join('\n').slice(0, 2000);
+    ].filter(Boolean).join('\n').slice(0, 6000);
     return { kind: 'link', text, imageDataUrl: await linkImage(info.imageUrl), label: `a ${service} ${info.kind}` };
   }
   if (body.kind === 'video') {

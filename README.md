@@ -4,7 +4,7 @@ Drop anything (a photo, a video, a song, a document, or a few words), say who it
 
 ## The flow
 
-1. **Drop anything.** Photo, video (4 still frames are taken on the phone), song (its title and artist are read from the file), PDF, Word doc, or typed words such as a song title.
+1. **Drop anything.** A pasted Spotify, Apple Music, YouTube, TikTok, Instagram or GitHub link, a photo, video (4 still frames are taken on the phone), song (its title and artist are read from the file), PDF, Word doc, or typed words such as a song title.
 2. **Who's it for.** Suggested audiences for the upload, a free-text option, and an optional "Anything else?" box for the niche or the feel.
 3. **Add a proven trick?** Optional templates, each a trick from a real app (a countdown like Too Good To Go, a map like Find My, a streak like Duolingo...), shown with a preview of the screen it makes.
 4. **Inventing your app.** The main system prompt runs in the four workbench stages (below). What each stage finds appears as it lands. If the upload names a song or film the AI doesn't actually know, it asks the user what it's about instead of guessing.
@@ -54,6 +54,7 @@ One **web service** (Node runtime):
 | `META_MODEL` | no | `muse-spark-1.3` | Muse model (standard tier only) |
 | `AI_CALLS_PER_HOUR` | no | `60` | Per visitor (a run is about 5 calls) |
 | `AI_CALLS_PER_DAY` | no | `1000` | Across all visitors |
+| `GITHUB_TOKEN` | no | | Raises GitHub's limit for reading pasted repos (60 an hour without it). Any token, no scopes needed |
 
 ## Local development
 

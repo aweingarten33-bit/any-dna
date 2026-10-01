@@ -3,7 +3,7 @@
 // is converted to JPEG. The bytes never leave this device except to the
 // server for the single AI call — nothing is stored.
 import type { Upload } from '../../server/lib/types.ts';
-import { LINK_NAMES, linkSource } from '../../server/lib/links.ts';
+import { LINK_NAMES, linkSource } from '../../server/lib/link-sources.ts';
 
 const MAX_DIMENSION = 1600;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -166,5 +166,5 @@ export function typedToUpload(text: string): Upload {
     : null;
   if (!candidate) return { kind: 'text', text: trimmed };
   if (linkSource(candidate)) return { kind: 'link', url: candidate };
-  throw new UploadError('Paste a Spotify, Apple Music, YouTube, TikTok or Instagram link, or type what it is.');
+  throw new UploadError('Paste a Spotify, Apple Music, YouTube, TikTok, Instagram or GitHub link, or type what it is.');
 }

@@ -239,6 +239,11 @@ async function fixtureFetch({ options, attempts, calls, aiRequests }: Session, i
   if (url.host === 'www.tiktok.com' && url.pathname === '/oembed') {
     return reply({ title: 'POV: you lost your friends at the festival', author_name: 'festivalfran', thumbnail_url: 'https://p16.tiktokcdn.com/demo.jpeg' }, 'application/json');
   }
+  if (url.host === 'api.github.com') {
+    if (url.pathname === '/repos/someone/private-thing') return new Response('{}', { status: 404 });
+    if (url.pathname.endsWith('/readme')) return new Response('# Moodboard\n\nTurn any playlist into a color palette. <img src="x">', { headers: { 'content-type': 'text/plain' } });
+    return reply({ full_name: 'acme/moodboard', description: 'Turn playlists into color palettes', stargazers_count: 4321, language: 'TypeScript', topics: ['music', 'color'], owner: { login: 'acme' } }, 'application/json');
+  }
   if (url.host === 'open.spotify.com') return html({ 'og:title': 'Kiss from a Rose', 'og:description': 'Seal · Seal II · Song · 1994', 'og:type': 'music.song', 'og:image': 'https://i.scdn.co/image/demo' });
   if (url.host === 'www.instagram.com') return html({ 'og:title': 'Instagram' });
   if (['i.ytimg.com', 'p16.tiktokcdn.com', 'i.scdn.co'].includes(url.host)) return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } });

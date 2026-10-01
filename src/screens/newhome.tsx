@@ -49,7 +49,7 @@ export function NewHome({ topBar, busy, onUpload, onDescribe }: {
     <main className="home">
       <section className="hero" aria-label="Start">
         <h1><span className="line">Drop anything.</span><br /><span className="line">Get an app idea.</span></h1>
-        <p className="hero-sub">Paste a Spotify, YouTube, TikTok or Instagram link, or drop a photo, video, song or document. The app idea comes straight from it.</p>
+        <p className="hero-sub">Paste a Spotify, YouTube, TikTok, Instagram or GitHub link, or drop a photo, video, song or document. The app idea comes straight from it.</p>
       </section>
       <div className="drop-row">
         {PICKERS.map((picker) => <button key={picker.id} type="button" className="btn-pill" disabled={active} onClick={() => inputs.current[picker.id]?.click()}>

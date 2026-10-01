@@ -282,3 +282,21 @@ Deno.test('pasted links: the service\'s public title, creator and cover image re
     fixtures.restore();
   }
 });
+
+Deno.test('pasted GitHub repos: description, stars, language, topics and the README start reach the prompt', async () => {
+  const fixtures = installFixtures();
+  try {
+    const read = await flowCall({ pass: 'read', upload: { kind: 'link', url: 'https://github.com/acme/moodboard' }, audience: 'Designers' });
+    assertEquals(read.status, 200);
+    const input = JSON.stringify(fixtures.aiRequests.at(-1)?.body.input);
+    assertMatch(input, /GitHub repo: “acme\/moodboard” by acme/);
+    assertMatch(input, /4,321 stars; written in TypeScript; topics: music, color/);
+    assertMatch(input, /README \(start\)/);
+    assert(!input.includes('<img'), 'HTML in a README is stripped');
+    const hidden = await flowCall({ pass: 'suggest', upload: { kind: 'link', url: 'https://github.com/someone/private-thing' } });
+    assertEquals(hidden.status, 400);
+    assertMatch(hidden.body.error, /private or doesn’t exist/);
+  } finally {
+    fixtures.restore();
+  }
+});
