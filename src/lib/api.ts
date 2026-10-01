@@ -1,6 +1,6 @@
 // Calls to the API. Same origin in production; in development Vite forwards
 // /api to the local server (see vite.config.ts).
-import type { BusinessPlan, Competitor, CompetitorListing, DnaMechanism, FilterResult, GeneratedIdea, GenerateMode, Kit, SourceResearch, Upload, UploadRead } from '../../server/lib/types.ts';
+import type { BusinessPlan, Competitor, CompetitorListing, DnaMechanism, ExerciseTurn, FilterResult, GeneratedIdea, GenerateMode, Kit, SourceResearch, Upload, UploadRead } from '../../server/lib/types.ts';
 
 const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
 
@@ -15,8 +15,7 @@ const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, r
  * POSTs to the API. A long AI step answers 202 "pending" while it works on the
  * server; we ask again, which joins the same job. Check-ins send `checkIn`
  * (the body without the upload's bytes); if the server lost the job (a
- * restart), it answers 409 and we send the full body once more. A dropped
- * connection (a locked phone, a flaky network, a redeploy) is retried too.
+ * restart), it answers 409 and we send the full body once more.
  */
 async function post<T>(name: string, body: unknown, signal?: AbortSignal, checkIn: unknown = body): Promise<T> {
   let failures = 0;
@@ -37,7 +36,6 @@ async function post<T>(name: string, body: unknown, signal?: AbortSignal, checkI
       await wait(Math.min(1000 * 2 ** (failures - 1), 8000), signal);
       continue;
     }
-    // Render answers 502/503 for a moment while a new version starts up.
     if ((response.status === 502 || response.status === 503) && !response.headers.get('content-type')?.includes('json') && failures < 6) {
       failures += 1;
       await wait(2000 * failures, signal);
@@ -59,18 +57,22 @@ export async function fingerprint(upload: Upload): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** A step that reads the upload: the bytes go up once, check-ins carry only the fingerprint. */
-async function withUpload<T>(upload: Upload, rest: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+/** A call that reads the upload: bytes go up once, check-ins carry only the fingerprint. */
+async function withUpload<T>(name: string, upload: Upload, rest: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
   const uploadRef = await fingerprint(upload);
-  return post<T>('flow-pass', { ...rest, upload, uploadRef }, signal, { ...rest, uploadRef });
+  return post<T>(name, { ...rest, upload, uploadRef }, signal, { ...rest, uploadRef });
 }
 
 export const api = {
+  // ACTIVE CORE: one creative turn. No online research/competitor pass before ideas.
+  exercise: (upload: Upload, context: string, reaction: string, signal?: AbortSignal) =>
+    withUpload<{ output: ExerciseTurn }>('exercise', upload, { context, reaction }, signal),
+
+  // Legacy endpoints kept so old saved ideas can still open their build/plan tools.
   suggest: (upload: Upload, signal?: AbortSignal) =>
-    withUpload<{ output: { audiences: string[] } }>(upload, { pass: 'suggest' }, signal),
-  // The Any DNA prompt, one canonical prompt per step: 1 research, 2 DNA, 3 generate, 4 filter.
+    withUpload<{ output: { audiences: string[] } }>('flow-pass', upload, { pass: 'suggest' }, signal),
   research: (upload: Upload, about: string, signal?: AbortSignal) =>
-    withUpload<{ output: SourceResearch }>(upload, { pass: 'research', about }, signal),
+    withUpload<{ output: SourceResearch }>('flow-pass', upload, { pass: 'research', about }, signal),
   dna: (research: SourceResearch, signal?: AbortSignal) =>
     post<{ output: DnaMechanism[] }>('flow-pass', { pass: 'dna', research }, signal),
   generate: (input: { read: UploadRead; second?: UploadRead; audience: string; direction: string; templateId: string | null; mode: GenerateMode | 'collide' | null; feedback: FilterResult['rejected'] }, signal?: AbortSignal) =>
