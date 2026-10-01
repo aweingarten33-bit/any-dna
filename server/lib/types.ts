@@ -200,5 +200,10 @@ export type SavedIdea = {
   created_at: string;
   source_app_id: string;
   audience: string;
-  output_json: Blueprint;
+  output_json: Blueprint | NewBlueprint;
 };
+
+/** The new front door saves NewBlueprint (version 3); the old flow saved Blueprint (version 2). */
+export function isNewBlueprint(blueprint: Blueprint | NewBlueprint): blueprint is NewBlueprint {
+  return blueprint.version === 3;
+}

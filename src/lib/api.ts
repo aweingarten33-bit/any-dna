@@ -1,6 +1,6 @@
 // Calls to Spinoff's API. Same origin in production; in development Vite
 // forwards /api to the local server (see vite.config.ts).
-import type { AppListing, BusinessPlan, Competitor, CompetitorListing, Dissect, Gaps, Idea, Kit, ReviewsSummary } from '../../server/lib/types.ts';
+import type { AppListing, BusinessPlan, Competitor, CompetitorListing, Dissect, Gaps, GeneratedIdea, Headline, Idea, Kit, NewBlueprint, Upload } from '../../server/lib/types.ts';
 
 const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
 
@@ -66,4 +66,20 @@ export const api = {
     post<{ output: Kit }>('run-pass', { pass: 'kit', app_id: app.app_id, country: app.country, audience, idea }, signal),
   plan: (app: AppListing, audience: string, idea: Idea, signal?: AbortSignal) =>
     post<{ output: BusinessPlan }>('run-pass', { pass: 'plan', app_id: app.app_id, country: app.country, audience, idea }, signal),
+
+  // ---- the new front door: ideas from the upload itself ----
+  flowSuggest: (upload: Upload, signal?: AbortSignal) =>
+    post<{ output: { audiences: string[] } }>('flow-pass', { pass: 'suggest', upload }, signal),
+  flowHeadline: (upload: Upload, audience: string, signal?: AbortSignal) =>
+    post<{ output: Headline }>('flow-pass', { pass: 'headline', upload, audience }, signal),
+  flowGenerate: (upload: Upload, audience: string, headline: Headline, templateId: string | undefined, signal?: AbortSignal) =>
+    post<{ output: GeneratedIdea }>('flow-pass', { pass: 'generate', upload, audience, headline, templateId }, signal),
+  flowCompete: (upload: Upload, audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>
+    post<{ competitors: Competitor[]; searched: CompetitorListing[] }>('flow-pass', { pass: 'compete', upload, audience, idea }, signal),
+  flowKit: (upload: Upload, audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>
+    post<{ output: Kit }>('flow-pass', { pass: 'kit', upload, audience, idea }, signal),
+  flowPlan: (upload: Upload, audience: string, idea: GeneratedIdea, signal?: AbortSignal) =>
+    post<{ output: BusinessPlan }>('flow-pass', { pass: 'plan', upload, audience, idea }, signal),
+  flowRedo: (pass: 'suggest' | 'headline' | 'generate' | 'kit' | 'plan', upload: Upload, audience: string, headline: Headline, idea: GeneratedIdea | undefined, templateId: string | undefined, signal?: AbortSignal) =>
+    post<{ output: unknown }>('flow-pass', { pass, upload, audience, headline, idea, templateId }, signal),
 };

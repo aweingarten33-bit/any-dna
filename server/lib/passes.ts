@@ -21,6 +21,13 @@ Rules:
 - A feature existing doesn't mean it caused the app's success. Separate what the data shows from your reading of why.
 - Unknown is a correct answer. If the data doesn't show something, say so instead of guessing.`;
 
+/** Research rules for the new upload-first passes. RULES above stays untouched for the old flow. */
+const NEW_RULES = `You are one step in Spinoff. Spinoff turns what a person uploads — a photo, a document, a song, a video, or their own words — into a new app idea inspired by it.
+
+Rules:
+- Use only the data supplied in this message. Never invent facts, apps, prices, numbers or market claims.
+- Unknown is a correct answer. If the data doesn't show something, say so instead of guessing.`;
+
 /** How every pass writes. The readers are normal people, not product managers. */
 const WRITING = `How to write:
 - Write like you're texting a smart friend who has never heard of this. Everyday words, short sentences, under 20 words each.
@@ -290,7 +297,7 @@ export async function runAudienceSuggest(upload: UploadInput): Promise<{ audienc
   const { audiences } = await structuredCall({
     schema: audienceSuggestSchema,
     effort: 'low',
-    system: `${RULES}
+    system: `${NEW_RULES}
 
 ${WRITING}
 
@@ -309,7 +316,7 @@ export async function runHeadline(upload: UploadInput, audience: string): Promis
   const headline = await structuredCall({
     schema: headlineSchema,
     effort: 'low',
-    system: `${RULES}
+    system: `${NEW_RULES}
 
 ${WRITING}
 
@@ -358,7 +365,7 @@ export async function runGenerate(
   const generated = await structuredCall({
     schema: generateSchema,
     effort: 'medium',
-    system: `${RULES}
+    system: `${NEW_RULES}
 
 ${WRITING}
 

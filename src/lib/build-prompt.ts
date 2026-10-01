@@ -80,3 +80,48 @@ export const CODE_TOOLS: Array<{ name: string; what: string; url: string }> = [
     url: 'https://cursor.com/',
   },
 ];
+
+/** The build prompt for an idea from the new front door. Written in code from
+ *  the idea and the mockup content, so it costs no AI time. */
+export function newBuildPrompt(idea: GeneratedIdea, kit?: Kit): string {
+  const lines = [
+    `Build a mobile-first web app called ${idea.name}.`,
+    '',
+    `Tagline: ${idea.tagline}`,
+    '',
+    `What it is: ${idea.what_it_is}`,
+    `Who it's for: ${idea.job}`,
+    '',
+    'How it works:',
+    ...idea.how_it_works.map((step, i) => `${i + 1}. ${step}`),
+    '',
+    `The one killer feature: ${idea.killer_feature}`,
+    '',
+    'Build only these features for the first version:',
+    ...idea.mvp.map((item) => `- ${item}`),
+  ];
+  if (kit) {
+    const { screen } = kit;
+    lines.push(
+      '',
+      'Main screen:',
+      `- A header with "${screen.greeting}" above the title "${screen.title}".`,
+      `- A highlighted card showing "${screen.hero_label}: ${screen.hero_value}".`,
+      `- A main button: "${screen.primary_action}".`,
+      '- A list of items like:',
+      ...screen.cards.map((card) => `  - ${card.title}: ${card.detail} (${card.tag})`),
+      `- A bottom tab bar: ${screen.tabs.join(', ')}.`,
+    );
+  }
+  lines.push(
+    '',
+    `What it is NOT (do not build this): ${idea.what_its_not}`,
+    '',
+    `Later, not in this version: ${idea.monetization}`,
+    '',
+    'Design: clean and modern. Lots of white space, one accent color, rounded cards, big tap targets. It must feel great on a phone.',
+    'Keep it simple: no admin dashboard and no settings beyond the basics. Add sign-in only where people need to share data.',
+    'Use realistic sample data so the app looks alive the first time it opens.',
+  );
+  return lines.join('\n');
+}
