@@ -11,6 +11,7 @@
 //   PASS_WAIT_MS          how long one request waits on a pass before answering "pending" (default 20000)
 import { serveDir, serveFile } from 'jsr:@std/http@^1/file-server';
 import { flowPass } from './lib/handlers.ts';
+import { runResearch, runDna, runGenerate, runFilter, type UploadInput } from './lib/passes.ts';
 
 // ---- Rate limits on AI calls ----
 
@@ -39,6 +40,50 @@ export function takeAiCall(visitor: string, now = Date.now()): string | null {
   return null;
 }
 
+// Temporary staging-only smoke test. Remove after validating the concise prompt stack.
+async function smokeTest() {
+  const started = Date.now();
+  const times: Record<string, number> = {};
+  let mark = started;
+  const lap = (name: string) => {
+    const now = Date.now();
+    times[name] = now - mark;
+    mark = now;
+  };
+
+  const upload: UploadInput = {
+    kind: 'text',
+    text: 'A neighborhood app where drivers report current gas prices at nearby stations. Prices change often, so recent crowd reports create a live local picture. People contribute updates because they also benefit from fresher information submitted by everyone else.',
+    label: 'smoke-test source',
+    packet: {
+      category: 'Text / Conversation',
+      type: 'smoke-test description',
+      provenance: 'Fixed text written for a staging smoke test.',
+      unavailable: [],
+    },
+  };
+
+  const research = await runResearch(upload);
+  lap('research_ms');
+  const dna = await runDna(research);
+  lap('dna_ms');
+  const ideas = await runGenerate({ read: { research, dna }, audience: 'New parents', mode: 'repurpose' });
+  lap('generate_ms');
+  const filter = await runFilter(ideas);
+  lap('filter_ms');
+
+  return {
+    ok: true,
+    source: upload.text,
+    audience: 'New parents',
+    research,
+    dna,
+    ideas,
+    filter,
+    timings: { ...times, total_ms: Date.now() - started },
+  };
+}
+
 // ---- Server ----
 
 const DIST = new URL('../dist', import.meta.url).pathname;
@@ -46,6 +91,15 @@ const DIST = new URL('../dist', import.meta.url).pathname;
 export async function handle(req: Request, info: Deno.ServeHandlerInfo): Promise<Response> {
   const url = new URL(req.url);
   if (url.pathname === '/api/health') return Response.json({ ok: true });
+  if (url.pathname === '/api/smoke-6f27a9') {
+    if (req.method !== 'GET') return Response.json({ error: 'Use GET' }, { status: 405 });
+    try {
+      return Response.json(await smokeTest());
+    } catch (error) {
+      console.error('[smoke-test]', error);
+      return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    }
+  }
 
   const route = url.pathname.match(/^\/api\/([\w-]+)$/)?.[1];
   if (route !== undefined) {
