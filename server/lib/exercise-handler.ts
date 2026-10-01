@@ -50,6 +50,9 @@ function startJob(key: string, work: () => Promise<unknown>): Job {
 }
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
 function dataUrlBytes(dataUrl: string) {
   const comma = dataUrl.indexOf(',');
   return Math.floor((comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl).length * 3 / 4);
@@ -57,18 +60,35 @@ function dataUrlBytes(dataUrl: string) {
 function dataUrlMime(dataUrl: string) {
   return (/^data:([^;,]+)/.exec(dataUrl)?.[1] ?? '').toLowerCase();
 }
-
-function docxText(dataUrl: string): string {
+function unzipDataUrl(dataUrl: string): Record<string, Uint8Array> {
   const binary = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
   const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
-  let xml: Uint8Array | undefined;
-  try { xml = unzipSync(bytes)['word/document.xml']; } catch { throw new HttpError(400, 'We could not open that Word document.'); }
+  try { return unzipSync(bytes); } catch { throw new HttpError(400, 'We could not open that document.'); }
+}
+function decodeXml(text: string) {
+  return text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+function docxText(dataUrl: string): string {
+  const xml = unzipDataUrl(dataUrl)['word/document.xml'];
   if (!xml) throw new HttpError(400, 'We could not read that Word document.');
   return new TextDecoder().decode(xml)
     .split('</w:p>')
     .map((paragraph) => [...paragraph.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((m) => m[1]).join(''))
-    .map((line) => line.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim())
+    .map((line) => decodeXml(line).trim())
     .filter(Boolean).join('\n');
+}
+
+function pptxText(dataUrl: string): string {
+  const files = unzipDataUrl(dataUrl);
+  const slides = Object.entries(files)
+    .filter(([path]) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
+    .sort(([a], [b]) => Number(/slide(\d+)/.exec(a)?.[1] ?? 0) - Number(/slide(\d+)/.exec(b)?.[1] ?? 0));
+  if (!slides.length) throw new HttpError(400, 'We could not read that PowerPoint.');
+  return slides.map(([path, xml]) => {
+    const words = [...new TextDecoder().decode(xml).matchAll(/<a:t>(.*?)<\/a:t>/gs)].map((m) => decodeXml(m[1]).trim()).filter(Boolean);
+    return words.length ? `${path.replace(/^.*slide|\.xml$/g, '')}: ${words.join(' | ')}` : '';
+  }).filter(Boolean).join('\n');
 }
 
 type RawUpload = { kind?: unknown; text?: unknown; dataUrl?: unknown; filename?: unknown; frames?: unknown; url?: unknown; from?: unknown };
@@ -130,6 +150,7 @@ async function normalizeUpload(raw: unknown): Promise<UploadInput> {
   if (!dataUrl.startsWith('data:')) throw new HttpError(400, 'That upload arrived broken. Try again.');
   if (dataUrlBytes(dataUrl) > MAX_UPLOAD_BYTES) throw new HttpError(400, 'That file is too big. Try one under 10 MB.');
   const mime = dataUrlMime(dataUrl);
+  const lowerName = filename.toLowerCase();
 
   if (body.kind === 'photo') {
     if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'].includes(mime)) throw new HttpError(400, 'That photo format didn’t work. Try a JPEG or PNG.');
@@ -137,16 +158,21 @@ async function normalizeUpload(raw: unknown): Promise<UploadInput> {
   }
 
   if (body.kind === 'document') {
-    if (mime === 'application/pdf') return { kind: 'pdf', dataUrl, label: filename, packet: { category: 'Document / Data', type: 'PDF', title: filename, provenance: 'Uploaded by the person; the PDF is attached to the model call.', unavailable: [] } };
-    if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    if (mime === 'application/pdf' || lowerName.endsWith('.pdf')) return { kind: 'pdf', dataUrl, label: filename, packet: { category: 'Document / Data', type: 'PDF', title: filename, provenance: 'Uploaded by the person; the PDF is attached to the model call.', unavailable: [] } };
+    if (mime === DOCX_MIME || lowerName.endsWith('.docx')) {
       const value = docxText(dataUrl);
       if (!value.trim()) throw new HttpError(400, 'We could not read any text from that Word document.');
       return { kind: 'text', text: value.slice(0, 20000), label: filename, packet: { category: 'Document / Data', type: 'Word document', title: filename, provenance: 'Uploaded by the person; its text was extracted on the server.', unavailable: ['images and formatting'] } };
     }
-    throw new HttpError(400, 'That document format didn’t work. Try a PDF or Word doc.');
+    if (mime === PPTX_MIME || lowerName.endsWith('.pptx')) {
+      const value = pptxText(dataUrl);
+      if (!value.trim()) throw new HttpError(400, 'We could not read any text from that PowerPoint.');
+      return { kind: 'text', text: value.slice(0, 24000), label: filename, packet: { category: 'Document / Data', type: 'PowerPoint', title: filename, provenance: 'Uploaded by the person; text from the slides was extracted on the server.', unavailable: ['images, animations and slide formatting'] } };
+    }
+    throw new HttpError(400, 'That document format didn’t work. Try a PDF, Word doc or PowerPoint.');
   }
 
-  throw new HttpError(400, 'Drop in words, a link, photo, video, song, PDF or Word doc.');
+  throw new HttpError(400, 'Drop in words, a link, photo, video, song, PDF, Word doc or PowerPoint.');
 }
 
 function fingerprintSource(raw: RawUpload): string {
