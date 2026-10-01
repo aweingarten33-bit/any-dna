@@ -2,7 +2,7 @@
 // serves one of these, so the local dev server can route to all of them.
 import { getRow, isFresh, LISTING_TTL_MS, REVIEWS_TTL_MS, saveAnalysis, saveListing, saveReviews } from './cache.ts';
 import { PassError } from './ai.ts';
-import { AppStoreError, closestCompetitors, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
+import { AppStoreError, closestCompetitors, findSong, lookupApp, parseAppInput, searchApps, searchCompetitors } from './itunes.ts';
 import { runAudienceSuggest, runBuild, runDissect, runFilter, runGaps, runInvent, runKit, runPlan, runRead, type UploadInput } from './passes.ts';
 import { getLowStarReviews, reviewProvider } from './reviews.ts';
 import { generateSchema, ideaSchema, readSchema } from './schemas.ts';
@@ -367,7 +367,9 @@ async function doFlowPass(pass: NewPassName, body: Record<string, unknown>): Pro
   if (pass === 'suggest' || pass === 'read') {
     const upload = await normalizeUpload(body.upload);
     if (pass === 'suggest') return { output: await runAudienceSuggest(upload) };
-    return { output: await runRead(upload, audience, direction) };
+    // Typed words that name a song get real facts from Apple Music. A failed lookup just means no facts.
+    const song = upload.kind === 'text' ? await findSong(upload.text, country).catch(() => null) : null;
+    return { output: await runRead(upload, audience, direction, song) };
   }
   if (pass === 'invent') return { output: await runInvent(readOf(body.read), audience, direction, templateId) };
   if (pass === 'filter') return { output: await runFilter(ideasOf(body.ideas), readOf(body.read)) };

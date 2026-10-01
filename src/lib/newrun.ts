@@ -22,6 +22,10 @@ export function useNewRun(upload: Upload, audience: string, direction: string, t
   const [states, setStates] = useState<Record<NewStepId, StepState>>({ read: 'waiting', invent: 'waiting', filter: 'waiting' });
   const [progress, setProgress] = useState<NewProgress>({});
   const [error, setError] = useState<string | null>(null);
+  /** True when the upload names something the AI doesn't know and the user hasn't described it yet. */
+  const [asking, setAsking] = useState(false);
+  const told = useRef('');
+  const skipped = useRef(false);
   const partial = useRef<NewProgress>({});
   const controller = useRef<AbortController | null>(null);
   const onDoneRef = useRef(onDone);
@@ -33,11 +37,13 @@ export function useNewRun(upload: Upload, audience: string, direction: string, t
     controller.current = abort;
     const signal = abort.signal;
     const out = partial.current;
+    const said = [direction, told.current].filter((part) => part.trim()).join('. ');
     setError(null);
+    setAsking(false);
 
     const steps: Record<NewStepId, () => Promise<void>> = {
-      read: async () => { out.read ??= (await api.flowRead(upload, audience, direction, signal)).output; },
-      invent: async () => { out.ideas ??= (await api.flowInvent(out.read!, audience, direction, templateId, signal)).output; },
+      read: async () => { out.read ??= (await api.flowRead(upload, audience, said, signal)).output; },
+      invent: async () => { out.ideas ??= (await api.flowInvent(out.read!, audience, said, templateId, signal)).output; },
       filter: async () => { out.kept ??= (await api.flowFilter(out.ideas!, out.read!, signal)).output; },
     };
 
@@ -50,6 +56,8 @@ export function useNewRun(upload: Upload, audience: string, direction: string, t
         if (signal.aborted) return;
         setProgress({ ...out });
         setStates((prev) => ({ ...prev, [id]: 'done' }));
+        // It doesn't know the song (or film, or book) and nobody described it: ask once instead of guessing.
+        if (id === 'read' && out.read && !out.read.recognized && !said.trim() && !skipped.current) { setAsking(true); return; }
       } catch (caught) {
         if (signal.aborted) return;
         setStates((prev) => ({ ...prev, [id]: 'failed' }));
@@ -65,5 +73,20 @@ export function useNewRun(upload: Upload, audience: string, direction: string, t
     return () => controller.current?.abort();
   }, [run]);
 
-  return { states, progress, error, retry: run };
+  /** The user's answer to "what's it about?": read it again with their words. */
+  const answer = useCallback((text: string) => {
+    told.current = text.trim();
+    partial.current = {};
+    setStates({ read: 'waiting', invent: 'waiting', filter: 'waiting' });
+    setProgress({});
+    void run();
+  }, [run]);
+
+  /** Skip the question and carry on with what it has. */
+  const skip = useCallback(() => {
+    skipped.current = true;
+    void run();
+  }, [run]);
+
+  return { states, progress, error, retry: run, asking, answer, skip };
 }

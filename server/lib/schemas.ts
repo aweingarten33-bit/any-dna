@@ -65,6 +65,7 @@ export const generateOutputSchema = z.object({ output: generateSchema });
 
 /** Stages 1 and 2: research the upload and extract its DNA. */
 export const readSchema = z.object({
+  recognized: z.boolean(),
   details: z.array(z.string()),
   meaning: z.string(),
   why_different: z.string(),

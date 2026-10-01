@@ -137,6 +137,7 @@ const PARTS: Record<string, any> = {
 };
 
 PARTS.read = {
+  recognized: true,
   details: ['losing your friends in a packed crowd', 'phones that can\u2019t be heard over the music', 'the moment you spot them again'],
   meaning: 'Being part of a crowd feels great until you lose your people. The relief of finding them again is the real high.',
   why_different: 'It is about the group, not the show.',
@@ -218,6 +219,13 @@ async function fixtureFetch({ options, attempts, calls, aiRequests }: Session, i
       const id = url.searchParams.get('id');
       const hit = [SOURCE_APP, ...COMPETITORS].find((item) => String(item.trackId) === id);
       return reply({ resultCount: hit ? 1 : 0, results: hit ? [hit] : [] });
+    }
+    if (url.pathname === '/search' && url.searchParams.get('entity') === 'song') {
+      const term = (url.searchParams.get('term') ?? '').toLowerCase();
+      const songs = term.includes('rose')
+        ? [{ trackName: 'Kiss from a Rose', artistName: 'Seal', collectionName: 'Seal II', primaryGenreName: 'Pop', releaseDate: '1994-05-23T07:00:00Z' }]
+        : [{ trackName: 'Concerts', artistName: 'Someone', collectionName: 'X', primaryGenreName: 'Rock', releaseDate: '2001-01-01T00:00:00Z' }];
+      return reply({ resultCount: songs.length, results: songs });
     }
     if (url.pathname === '/search') {
       const term = (url.searchParams.get('term') ?? '').toLowerCase();

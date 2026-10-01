@@ -12,6 +12,7 @@ import { audienceSuggestSchema, buildSchema, dissectSchema, filterSchema, gapsMo
 import type { AppListing, BusinessPlan, CompetitorListing, Dissect, Gaps, GeneratedIdea, Idea, Kit, Review } from './types.ts';
 import type { UserContent } from './ai.ts';
 import { templateById, type PhoneLayout } from './templates.ts';
+import type { SongFacts } from './itunes.ts';
 import type { z } from 'npm:zod@^4.1.0';
 
 const RULES = `You are one step in Spinoff. Spinoff takes an app that already works and turns what makes it work into a new app for a different group of people.
@@ -337,7 +338,7 @@ function directionLine(direction: string | undefined) {
   return direction ? `\nThe user's direction (the niche, the feel, or what they want it to do): ${direction}` : '';
 }
 
-export async function runRead(upload: UploadInput, audience: string, direction?: string): Promise<z.infer<typeof readSchema>> {
+export async function runRead(upload: UploadInput, audience: string, direction?: string, song?: SongFacts | null): Promise<z.infer<typeof readSchema>> {
   const read = await structuredCall({
     schema: readSchema,
     effort: 'medium',
@@ -358,6 +359,7 @@ Study what the user supplied. Build a factual model of:
 
 Rules:
 - Use only what was supplied, plus what is widely known about a well-known work the user names. Never invent facts, URLs or market claims.
+- If the upload names a song, film, book or other work you don't actually know, say so. Don't guess what it's about from its title. Work from what you do have (the title, the artist, the genre, the user's own words) and list the rest as unknowns.
 - Separate what is in it from what it may mean.
 - A detail being present does not mean it matters.
 - High confidence requires actual evidence, not a plausible story.
@@ -390,13 +392,14 @@ Rules:
 - Separately, keep 3 to 6 specific details of the upload (an image, a line's meaning, a sound, a moment) so later the app can call back to it.
 
 Return:
+- recognized: if the upload names a specific work (a song, film, book, painting...), true only if you actually know that work; false if you don't. If it names no work, true.
 - details: the specific details of the upload, a few words each.
 - meaning: what it means underneath, 2 or 3 sentences.
 - why_different: why this one hits differently from others like it, one or two sentences.
 - conditions: who is involved, when, where, what's at stake, one or two sentences.
 - unknowns: up to 3 things you can't tell.
 - mechanics: 3 or 4, strongest first. Each with name (plain English, 2 to 5 words), chain (like A → B → C → D), how_it_works (one sentence), why_it_works (one sentence), needs (what conditions it needs, one sentence), transferable (how transferable it is, one sentence).`,
-    user: uploadContent(upload, `${uploadLead(upload)}\n\nAudience the app will be for: ${audience}${directionLine(direction)}\n\nDo Part 1 and Part 2.`),
+    user: uploadContent(upload, `${uploadLead(upload)}${song ? `\n\nApple Music lists this song (fetched): "${song.track}" by ${song.artist}${song.album ? `, from ${song.album}` : ''}${song.genre ? `, ${song.genre}` : ''}${song.year ? `, ${song.year}` : ''}.` : ''}\n\nAudience the app will be for: ${audience}${directionLine(direction)}\n\nDo Part 1 and Part 2.`),
   });
   return { ...read, details: read.details.slice(0, 6), unknowns: read.unknowns.slice(0, 3), mechanics: read.mechanics.slice(0, 4) };
 }

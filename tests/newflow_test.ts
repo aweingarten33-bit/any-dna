@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertMatch } from 'jsr:@std/assert@^1';
 import { flowPass, forgetJobs } from '../server/lib/handlers.ts';
 import type { GeneratedIdea, Kit } from '../server/lib/types.ts';
-import { installFixtures } from '../dev/fixtures.ts';
+import { installFixtures, PASS_FIXTURES } from '../dev/fixtures.ts';
 import { zipSync } from 'npm:fflate@^0.8.2';
 
 Deno.env.set('META_MODEL_API_KEY', 'fixture-key');
@@ -154,6 +154,24 @@ Deno.test('a video arrives as still frames, each sent to Muse as an image, in or
     assertMatch(input, /3 still frames/);
     const broken = await flowCall({ pass: 'read', upload: { kind: 'video', frames: ['not an image'], filename: 'x.mov' }, audience: 'x' });
     assertEquals(broken.status, 400);
+  } finally {
+    fixtures.restore();
+  }
+});
+
+Deno.test('typed words that name a song get real Apple Music facts; an unknown work is flagged, not guessed', async () => {
+  const fixtures = installFixtures({ reply: (pass) => (pass === 'read' ? { ...PASS_FIXTURES.read, recognized: false } : undefined) });
+  try {
+    const read = await flowCall({ pass: 'read', upload: { kind: 'text', text: 'The song “Kiss from a Rose” by Seal' }, audience: 'Commuters' });
+    assertEquals(read.status, 200);
+    assertEquals(read.body.output.recognized, false);
+    const call = fixtures.aiRequests.find((r) => String(r.body.instructions).includes('PART 2 — Extract DNA'));
+    assertMatch(String(call?.body.instructions), /don't actually know, say so/);
+    assertMatch(JSON.stringify(call?.body.input), /Apple Music lists this song \(fetched\): \\"Kiss from a Rose\\" by Seal/);
+    // An ordinary sentence doesn't match a song by accident.
+    fixtures.aiRequests.length = 0;
+    await flowCall({ pass: 'read', upload: TEXT_UPLOAD, audience: 'Concertgoers' });
+    assert(!JSON.stringify(fixtures.aiRequests[0]?.body.input).includes('Apple Music lists'));
   } finally {
     fixtures.restore();
   }

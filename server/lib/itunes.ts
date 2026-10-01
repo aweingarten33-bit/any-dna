@@ -128,3 +128,33 @@ export function closestCompetitors(searched: CompetitorListing[], max = 5): Comp
       return { ...app, overlap: `Comes up when you search ${list}.` };
     });
 }
+
+/** Real facts about a song, from Apple Music's public search. */
+export type SongFacts = { track: string; artist: string; album: string; genre: string; year: string };
+
+const norm = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * If the user's words name a song, find it on Apple Music. Only a confident
+ * match counts: the song's title must appear in what they typed, and so must
+ * the artist or the word "song", so ordinary sentences don't match by accident.
+ */
+export async function findSong(text: string, country = 'us'): Promise<SongFacts | null> {
+  const words = norm(text);
+  if (!words || words.length > 200) return null;
+  const data = await getJson(`${BASE}/search?term=${encodeURIComponent(text.slice(0, 120))}&country=${country}&entity=song&limit=5`);
+  for (const result of data.results as Array<Record<string, unknown>>) {
+    const track = typeof result.trackName === 'string' ? result.trackName : '';
+    const artist = typeof result.artistName === 'string' ? result.artistName : '';
+    const title = norm(track.replace(/\s*[([].*$/, ''));
+    if (title.length < 3 || !words.includes(title)) continue;
+    if (!words.includes(norm(artist)) && !/\bsong\b/.test(words)) continue;
+    return {
+      track, artist,
+      album: typeof result.collectionName === 'string' ? result.collectionName : '',
+      genre: typeof result.primaryGenreName === 'string' ? result.primaryGenreName : '',
+      year: typeof result.releaseDate === 'string' ? result.releaseDate.slice(0, 4) : '',
+    };
+  }
+  return null;
+}

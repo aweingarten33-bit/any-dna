@@ -38,7 +38,8 @@ export function NewLoading({ upload, audience, direction, templateId, onDone, on
   upload: Upload; audience: string; direction: string; templateId: string | null;
   onDone: (read: UploadRead, kept: GeneratedIdea[]) => void; onBack: () => void;
 }) {
-  const { states, progress, error, retry } = useNewRun(upload, audience, direction, templateId, onDone);
+  const { states, progress, error, retry, asking, answer, skip } = useNewRun(upload, audience, direction, templateId, onDone);
+  const [about, setAbout] = useState('');
   const meter = useMeter(states);
   const slow = useSlow(states.read === 'running' || states.invent === 'running');
   const found = !!(progress.read || progress.ideas);
@@ -79,6 +80,15 @@ export function NewLoading({ upload, audience, direction, templateId, onDone, on
         </li>;
       })}
     </ol>
+    {asking && <section className="ask" role="dialog" aria-label="Tell us about it">
+      <p className="ask-k">We don’t know this one</p>
+      <p className="ask-q">What’s it about, or how does it make you feel?</p>
+      <textarea rows={3} value={about} maxLength={600} onChange={(event) => setAbout(event.target.value)} placeholder="Like “a slow breakup song that ends hopeful” or “makes me want to drive with the windows down”." data-testid="input-about" />
+      <div className="ask-actions">
+        <button type="button" className="btn-pill is-primary" disabled={!about.trim()} onClick={() => answer(about)} data-testid="button-about"><span>Keep going</span><ArrowRight size={18} /></button>
+        <button type="button" className="btn-pill" onClick={skip}><span>Skip</span></button>
+      </div>
+    </section>}
     {error ? <p className="flow-error" role="alert">{error}</p>
       : slow ? <p className="screen-note" role="status">Still thinking. It reads what you dropped in literally and figuratively before it invents anything, which can take a minute. You can lock your phone; it picks up where it left off.</p>
       : <p className="screen-note">It reads what you dropped in, finds the pattern underneath, invents 3 apps, and keeps only the ones a stranger would get.</p>}

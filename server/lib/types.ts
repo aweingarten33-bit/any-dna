@@ -180,6 +180,8 @@ export type NewPassName = 'suggest' | 'read' | 'invent' | 'filter' | 'compete' |
 
 /** Stages 1 and 2 of the main prompt: the upload researched, and its DNA. */
 export type UploadRead = {
+  /** False when the upload names a song, film or other work the AI doesn't actually know. */
+  recognized: boolean;
   details: string[];
   meaning: string;
   why_different: string;
