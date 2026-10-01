@@ -1,9 +1,10 @@
 // Which pasted links are supported. Shared by the browser (to recognize a link)
 // and the server (to read it), so it has no server-only code.
 
-export type LinkSource = 'spotify' | 'apple-music' | 'youtube' | 'tiktok' | 'instagram' | 'github';
+export type LinkSource = 'app-store' | 'spotify' | 'apple-music' | 'youtube' | 'tiktok' | 'instagram' | 'github';
 
 const HOSTS: Array<[RegExp, LinkSource]> = [
+  [/^apps\.apple\.com$/, 'app-store'],
   [/^(open\.)?spotify\.com$|^spotify\.link$/, 'spotify'],
   [/^music\.apple\.com$/, 'apple-music'],
   [/^(www\.|m\.|music\.)?youtube\.com$|^youtu\.be$/, 'youtube'],
@@ -13,7 +14,7 @@ const HOSTS: Array<[RegExp, LinkSource]> = [
 ];
 
 export const LINK_NAMES: Record<LinkSource, string> = {
-  spotify: 'Spotify', 'apple-music': 'Apple Music', youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', github: 'GitHub',
+  'app-store': 'App Store', spotify: 'Spotify', 'apple-music': 'Apple Music', youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', github: 'GitHub',
 };
 
 /** The supported service a link belongs to, or null. Only https links count. */
