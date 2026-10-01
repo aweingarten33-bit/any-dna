@@ -46,8 +46,8 @@ export const ideaSchema = z.object({
   search_terms: z.array(z.string()),
 });
 
-/** Fit check and idea from one call. */
-export const buildSchema = z.object({ components: fitCheckSchema.shape.components, idea: ideaSchema });
+/** The idea, from its own call. */
+export const ideaOnlySchema = z.object({ idea: ideaSchema });
 
 const UNSUPPORTED = ['$schema', 'minItems', 'maxItems', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'pattern', 'format'];
 

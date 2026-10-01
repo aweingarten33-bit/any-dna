@@ -93,13 +93,15 @@ const PARTS: Record<string, any> = {
 export const PASS_FIXTURES: Record<string, any> = {
   dissect: PARTS.dissect,
   gaps: PARTS.gaps,
-  build: { components: PARTS.fit_check.components, idea: PARTS.mutate },
+  build: { idea: PARTS.mutate },
+  fit: { components: PARTS.fit_check.components },
 };
 
 function whichPass(system: string) {
   if (system.includes('understand why this app works')) return 'dissect';
   if (system.includes('find the complaints that repeat')) return 'gaps';
-  if (system.includes('You adapt the proven mechanics')) return 'build';
+  if (system.includes('You check which proven mechanics')) return 'fit';
+  if (system.includes('You design one new app')) return 'build';
   throw new Error('Unknown pass prompt');
 }
 

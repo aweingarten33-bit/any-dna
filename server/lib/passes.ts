@@ -8,7 +8,7 @@
 // Prompt 3's "never [source] for [X]" rule is left out on purpose: carrying a
 // proven app to a new audience is what Spinoff does. A reskin is still rejected.
 import { structuredCall } from './ai.ts';
-import { buildSchema, dissectSchema, gapsModelSchema } from './schemas.ts';
+import { dissectSchema, fitCheckSchema, gapsModelSchema, ideaOnlySchema } from './schemas.ts';
 import type { AppListing, Dissect, FitCheck, Gaps, Idea, Review } from './types.ts';
 
 const RULES = `You are one step in Spinoff, a tool that takes an app that already works and adapts it for a new audience.
@@ -102,33 +102,48 @@ Your job: find the complaints that repeat across these 1 to 3 star reviews of ${
   return { repeated_complaints: complaints.slice(0, 8) };
 }
 
-// ---- build: fit check + idea in one call --------------------------------
-// One call instead of two saves a full round of waiting. Part 1's judgment is
-// written first, so Part 2 still builds on it.
+// ---- build: fit check and idea as two calls at the same time -------------
+// Muse's time grows with how much it writes, so the fit check and the idea are
+// written by two calls running side by side: each writes about half as much.
+// The idea call is told to make the same survives/adapts/breaks judgment
+// silently, so it still builds on it.
+
+const FIT_RULE = `Judge each mechanic by one question: does this audience already have the behavior it needs, at the frequency it needs?
+- survives: they already do this, often enough. Keep it as is.
+- adapts: the behavior exists but in a different form or rhythm.
+- breaks: they don't do this. Example: a daily streak breaks for people selling a car, because nobody sells a car daily.`;
+
+function buildContext(app: AppListing, dissect: Dissect, carryable: Gaps['repeated_complaints'], audience: string) {
+  return `Audience: ${audience}\n\nSource app: ${app.name} (category: ${app.category})\n\nMechanics:\n${JSON.stringify(dissect, null, 2)}\n\nRepeated complaints about how ${app.name} works (counted from fetched reviews):\n${carryable.length ? carryable.map((complaint) => `- ${complaint.theme} (${complaint.evidence_count} reviews)`).join('\n') : '(none found)'}`;
+}
 
 export async function runBuild(app: AppListing, dissect: Dissect, gaps: Gaps, audience: string): Promise<{ fit_check: FitCheck; idea: Idea }> {
   const carryable = gaps.repeated_complaints.filter((complaint) => complaint.about === 'mechanic');
-  const result = await structuredCall({
-    schema: buildSchema,
-    // Low effort: the prompt already spells out the reasoning, and medium took about a minute.
-    effort: 'low',
-    system: `${RULES}
+  const user = buildContext(app, dissect, carryable, audience);
+  const [fit, made] = await Promise.all([
+    structuredCall({
+      schema: fitCheckSchema,
+      effort: 'low',
+      system: `${RULES}
 
-You adapt the proven mechanics of ${app.name} for a new audience: ${audience}. Do it in two parts, in order.
-
-PART 1 — components (the fit check).
-Judge each component by one question: does this audience already have the behavior it needs, at the frequency it needs?
-- survives: they already do this, often enough. Keep it as is.
-- adapts: the behavior exists but in a different form or rhythm. Say what changes.
-- breaks: they don't do this. Example: a daily streak breaks for people selling a car, because nobody sells a car daily.
+You check which proven mechanics of ${app.name} carry over to a new audience: ${audience}.
+${FIT_RULE}
 One row each for core_loop, frequency_required, reward_type, retention_lever, monetization_trigger and network_effect, then one row for each of the two most important dependencies. Use those plain names as "component".
 - audience_behavior: what this audience actually does today that is relevant, concretely. One sentence.
 - reason: one short sentence.
 - replacement: for "adapts", the adapted version. For "breaks", a replacement built on a behavior this audience does have. For "survives", an empty string. One sentence.
-This is your judgment, not fetched data, so don't present it as fact or cite numbers.
+This is your judgment, not fetched data, so don't present it as fact or cite numbers.`,
+      user,
+    }),
+    structuredCall({
+      schema: ideaOnlySchema,
+      effort: 'low',
+      system: `${RULES}
 
-PART 2 — idea: one new app for ${audience}, built from Part 1.
-- Keep every component that survived. Use the adapted version of every component that adapts. Replace every component that broke with its replacement.
+You design one new app for ${audience}, built from the proven mechanics of ${app.name}.
+First, silently, judge each mechanic:
+${FIT_RULE}
+Then design the app: keep what survives, adapt what adapts, and replace what breaks with something built on a behavior this audience does have.
 - Make it different using the incumbent's repeated complaints listed below: design the new app so that complaint can't happen. Only use complaints about how the app works; they are the ones that would follow the mechanic. If none are listed, say there's no review evidence to differentiate on.
 The idea must have:
 - A real person in this audience with a real, recurring problem.
@@ -149,8 +164,10 @@ Idea fields:
 - monetization: how it would make money, in one or two sentences. Don't state prices: you have no price data.
 - main_risk: the single most likely reason it fails, in one sentence.
 - search_terms: 3 or 4 short phrases someone in this audience would type into the App Store to find an app that does this job. Not the product name.`,
-    user: `Audience: ${audience}\n\nSource app: ${app.name} (category: ${app.category})\n\nMechanics:\n${JSON.stringify(dissect, null, 2)}\n\nRepeated complaints about how ${app.name} works (counted from fetched reviews):\n${carryable.length ? carryable.map((complaint) => `- ${complaint.theme} (${complaint.evidence_count} reviews)`).join('\n') : '(none found)'}`,
-  });
+      user,
+    }),
+  ]);
+  const result = { components: fit.components, idea: made.idea };
   return {
     fit_check: { components: result.components.slice(0, 10).map((row) => ({ ...row, replacement: row.status === 'survives' ? '' : row.replacement })) },
     idea: {

@@ -76,7 +76,7 @@ Deno.test('full run: every claim about competitors and complaints comes from fet
     assertEquals(fixtures.attempts.get('dissect'), 1);
 
     // Every AI call went to Muse, standard tier, not stored, with the schema in the instructions.
-    assertEquals(fixtures.aiRequests.length, 3); // dissect, gaps, build
+    assertEquals(fixtures.aiRequests.length, 4); // dissect, gaps, and build's fit check and idea, side by side
     for (const { provider, body } of fixtures.aiRequests) {
       assertEquals(provider, 'muse');
       assertEquals(body.model, 'muse-spark-1.3');
@@ -97,7 +97,7 @@ Deno.test('invalid JSON is retried once, then the run fails clearly', async () =
   } finally {
     once.restore();
   }
-  const always = installFixtures({ reply: (pass) => (pass === 'build' ? { components: 'wrong shape', idea: {} } : undefined) });
+  const always = installFixtures({ reply: (pass) => (pass === 'build' ? { idea: {} } : undefined) });
   try {
     const failed = await call(runPass, { pass: 'build', app_id: SOURCE_ID, audience: 'Renters' });
     assertEquals(failed.status, 502);

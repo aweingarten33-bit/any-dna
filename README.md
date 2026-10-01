@@ -54,7 +54,7 @@ dev/                         local API server + fictional fixture data for demo 
 tests/                       pipeline tests (Deno)
 ```
 
-Each pass is its own request, so no single request runs long. A run is 3 AI calls in 2 rounds: reading the app and mining the reviews run at the same time, then the build (fit check, idea and MVP in one call, low reasoning effort). Competitors are then found by an App Store search in plain code, which takes about a second. Muse's time tracks how much it writes, so the prompts ask for short fields. A pass that runs longer than 20 seconds answers "pending" and the browser asks again, joining the same job. The loading screen shows each finding as it arrives. Each pass returns JSON matching a schema, is validated with Zod, and is retried once if invalid. The `dissect` and `gaps` passes don't depend on the audience, so they're cached next to the listing and reviews.
+Each pass is its own request, so no single request runs long. A run is 4 AI calls in 2 rounds: reading the app and mining the reviews run at the same time, then the build: the fit check and the idea (with MVP) as two calls side by side, low reasoning effort, so each writes half as much. Competitors are then found by an App Store search in plain code, which takes about a second. Muse's time tracks how much it writes, so the prompts ask for short fields. A pass that runs longer than 20 seconds answers "pending" and the browser asks again, joining the same job. The loading screen shows each finding as it arrives. Each pass returns JSON matching a schema, is validated with Zod, and is retried once if invalid. The `dissect` and `gaps` passes don't depend on the audience, so they're cached next to the listing and reviews.
 
 ### AI provider
 
