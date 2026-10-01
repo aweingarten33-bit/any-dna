@@ -45,7 +45,7 @@ export async function museGenerate(req: GenerateRequest): Promise<{ text: string
         body: JSON.stringify({
           model: MODEL,
           store: false,
-          max_output_tokens: 8000,
+          max_output_tokens: req.maxOutputTokens ?? 8000,
           reasoning: { effort: req.effort },
           instructions: `${req.system}\n\nReturn exactly one JSON object and nothing else: no markdown, no commentary. It must match this JSON Schema:\n${JSON.stringify(req.schema)}`,
           input: toInput(req.user),
@@ -54,7 +54,6 @@ export async function museGenerate(req: GenerateRequest): Promise<{ text: string
     } catch (error) {
       lastError = error instanceof Error && error.name === 'TimeoutError' ? 'Muse timed out' : 'could not reach Muse';
       console.error(`[muse] attempt ${attempt + 1}: ${lastError}`);
-      // A timed-out call already used two minutes; another would leave the user waiting four.
       if (error instanceof Error && error.name === 'TimeoutError') break;
       continue;
     }
