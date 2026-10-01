@@ -1,0 +1,293 @@
+/* Mobile interaction language taken from the user's full reference recording:
+   minimal chrome, rounded floating sheets, grouped rows, soft depth and quick
+   springy transitions. This deliberately preserves the League-style idea feed. */
+
+/* Top-left project control is a close/back-out action, not an add action. */
+.is-workspace .topbar > .glass-round[data-testid='button-new-remix'] svg {
+  display: none !important;
+}
+.is-workspace .topbar > .glass-round[data-testid='button-new-remix']::before {
+  content: '×';
+  display: block;
+  font-size: 34px;
+  font-weight: 300;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+/* Menus should behave like small floating sheets, not desktop dropdowns. */
+.composer-menu,
+.account-menu {
+  border: 1px solid rgba(255,255,255,.15) !important;
+  background:
+    linear-gradient(180deg, rgba(31,38,61,.90), rgba(14,19,34,.94)) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.35) !important;
+  backdrop-filter: blur(28px) saturate(1.35) !important;
+  box-shadow:
+    0 30px 80px -28px rgba(0,0,0,.95),
+    inset 0 1px 0 rgba(255,255,255,.10) !important;
+}
+
+.composer-menu {
+  border-radius: 28px !important;
+  padding: 10px !important;
+  gap: 6px !important;
+  animation: arc-sheet-in .28s cubic-bezier(.2,.9,.25,1) !important;
+}
+
+.composer-menu > button,
+.account-menu > button,
+.account-menu > a {
+  border-radius: 18px !important;
+}
+
+.composer-menu > button {
+  min-height: 52px;
+  padding: 12px 14px !important;
+  background: rgba(255,255,255,.045) !important;
+  border: 1px solid rgba(255,255,255,.045) !important;
+}
+
+.composer-menu > button + button { margin-top: 1px; }
+.composer-menu > button:active {
+  transform: scale(.985);
+  background: rgba(255,255,255,.10) !important;
+}
+
+@keyframes arc-sheet-in {
+  from { opacity: 0; transform: translateY(14px) scale(.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* The random-question flow becomes the same kind of clean search sheet from
+   the reference video: compact intro, question, then obvious full-width rows. */
+.composer-menu.taste-gate {
+  width: 100% !important;
+  left: 0 !important;
+  right: 0 !important;
+  padding: 12px !important;
+  gap: 8px !important;
+  max-height: min(56svh, 520px) !important;
+  overflow-y: auto !important;
+}
+
+.taste-gate .composer-menu-extra { padding: 5px 5px 8px !important; }
+.taste-gate .composer-menu-extra > small::after {
+  letter-spacing: .08em;
+  color: rgba(236,241,255,.62);
+}
+.taste-gate .composer-menu-extra > span::after {
+  display: block;
+  margin-top: 6px;
+  font-size: 13.5px !important;
+  line-height: 1.4 !important;
+  color: rgba(236,241,255,.72);
+}
+.taste-gate .composer-menu-extra > strong {
+  display: block;
+  margin-top: 13px;
+  font-size: clamp(18px, 4.8vw, 22px) !important;
+  line-height: 1.18;
+  letter-spacing: -.02em;
+}
+
+.taste-gate > button {
+  width: 100% !important;
+  min-height: 52px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  padding: 13px 15px !important;
+  text-align: left !important;
+  background: rgba(255,255,255,.065) !important;
+  border: 1px solid rgba(255,255,255,.065) !important;
+  border-radius: 17px !important;
+}
+
+/* Kill the old pseudo-element bullet that was becoming its own flex item. */
+.taste-gate > button::before,
+div[role='dialog'][aria-label^='Quick question'] button::before {
+  content: none !important;
+  display: none !important;
+}
+.taste-gate > button span {
+  width: 100% !important;
+  display: block !important;
+}
+.taste-gate > button span b {
+  display: flex !important;
+  align-items: flex-start;
+  width: 100%;
+  font-size: 17px !important;
+  line-height: 1.28;
+  white-space: normal;
+}
+.taste-gate > button span b::before {
+  content: '•' !important;
+  flex: none;
+  display: inline-block !important;
+  margin-right: 10px !important;
+  opacity: .7;
+  transform: translateY(-1px);
+}
+
+/* Account/settings menu gets the grouped, compact settings-card feeling from
+   the recording instead of reading like a web dropdown. */
+.account-menu {
+  padding: 10px !important;
+  border-radius: 28px !important;
+  gap: 6px !important;
+}
+.account-id,
+.account-row {
+  border-radius: 17px !important;
+  background: rgba(255,255,255,.055) !important;
+  border: 1px solid rgba(255,255,255,.05) !important;
+}
+
+/* Details open like a floating page card rather than a hard full-screen cut. */
+@media (max-width: 760px) {
+  .sheet-overlay {
+    padding: 12px 10px 0 !important;
+    align-items: end !important;
+    background: rgba(4,6,13,.48) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    backdrop-filter: blur(15px) !important;
+  }
+  .sheet {
+    width: 100% !important;
+    height: min(91dvh, 920px) !important;
+    border-radius: 32px 32px 0 0 !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    border-bottom: 0 !important;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(20,25,44,.99), rgba(6,9,19,.995)) !important;
+    box-shadow: 0 -30px 90px -42px rgba(0,0,0,.96) !important;
+  }
+
+  /* Keep the composer/dock visually lightweight and detached from the page. */
+  .home-dock,
+  .guide .dock {
+    background: linear-gradient(to top, rgba(0,0,0,.72) 0%, rgba(0,0,0,.28) 58%, transparent 100%) !important;
+  }
+  .composer {
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.11),
+      0 22px 58px -28px rgba(0,0,0,.96) !important;
+  }
+
+  /* Search/action sheet hugs the dock just like the reference browser. */
+  .composer-menu {
+    bottom: calc(100% + 10px) !important;
+    width: 100% !important;
+    max-height: 54svh !important;
+  }
+  .composer-menu:not(.taste-gate) > button span { min-width: 0; }
+  .composer-menu:not(.taste-gate) > button b { font-size: 16px !important; }
+  .composer-menu:not(.taste-gate) > button small { font-size: 12.5px !important; }
+
+  /* The end of the reference video turns open pages into a tactile card
+     switcher. Saved projects are our equivalent: browse them as page cards. */
+  .drawer.glass-drawer.projects-sheet {
+    padding: calc(14px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom)) !important;
+    background:
+      radial-gradient(circle at 18% 8%, rgba(123,93,255,.16), transparent 34%),
+      radial-gradient(circle at 88% 22%, rgba(48,190,255,.10), transparent 36%),
+      rgba(7,9,17,.985) !important;
+  }
+
+  .projects-sheet .gd-head,
+  .projects-sheet .gd-modes,
+  .projects-sheet .gd-row,
+  .projects-sheet .gd-rule,
+  .projects-sheet .gd-list {
+    max-width: 680px !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .projects-sheet .gd-list {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    align-content: start;
+    padding: 10px 0 28px !important;
+    overflow-y: auto;
+  }
+
+  .projects-sheet .gd-item {
+    position: relative;
+    min-width: 0;
+    height: clamp(170px, 27svh, 235px) !important;
+    overflow: hidden;
+    border-radius: 25px !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    background:
+      radial-gradient(circle at 20% 12%, rgba(128,103,255,.26), transparent 34%),
+      linear-gradient(155deg, rgba(34,41,70,.94), rgba(11,15,29,.98)) !important;
+    box-shadow: 0 20px 46px -30px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.08);
+    transition: transform .2s cubic-bezier(.2,.9,.25,1), border-color .2s ease;
+  }
+
+  .projects-sheet .gd-item:nth-child(3n + 2) {
+    background:
+      radial-gradient(circle at 78% 8%, rgba(61,198,255,.22), transparent 34%),
+      linear-gradient(155deg, rgba(26,48,70,.94), rgba(9,16,29,.98)) !important;
+  }
+  .projects-sheet .gd-item:nth-child(3n + 3) {
+    background:
+      radial-gradient(circle at 30% 12%, rgba(228,88,178,.20), transparent 34%),
+      linear-gradient(155deg, rgba(48,31,65,.94), rgba(14,11,27,.98)) !important;
+  }
+
+  .projects-sheet .gd-item:active { transform: scale(.975); }
+  .projects-sheet .gd-item.is-selected {
+    border-color: rgba(138,174,255,.7) !important;
+    box-shadow: 0 22px 50px -30px rgba(55,112,255,.65), inset 0 0 0 1px rgba(113,158,255,.28) !important;
+  }
+
+  .projects-sheet .gd-item-main {
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: flex-end !important;
+    padding: 20px 14px 16px !important;
+    text-align: left !important;
+    white-space: normal !important;
+    font-size: clamp(16px, 4.4vw, 20px) !important;
+    line-height: 1.06 !important;
+    font-weight: 700 !important;
+    letter-spacing: -.025em;
+    color: #fff !important;
+    background: linear-gradient(180deg, transparent 35%, rgba(5,8,18,.78) 100%) !important;
+  }
+
+  .projects-sheet .gd-more {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    background: rgba(5,8,18,.42) !important;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+
+  .projects-sheet .gd-item-menu {
+    top: 48px !important;
+    right: 8px !important;
+    z-index: 4;
+  }
+}
+
+@media (max-width: 430px) {
+  .projects-sheet .gd-list { gap: 9px !important; }
+  .projects-sheet .gd-item { height: clamp(155px, 24svh, 205px) !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-menu { animation: none !important; }
+  .projects-sheet .gd-item { transition: none !important; }
+}
